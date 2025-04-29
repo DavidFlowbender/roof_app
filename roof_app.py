@@ -48,17 +48,7 @@ def reset_inputs():
 def main():
     st.title("Gable Roof Calculator")
 
-    st.markdown(
-        """
-        <style>
-        .element-container:nth-child(1) {
-            position: sticky;
-            top: 10px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    
 
     col1, col2 = st.columns([1, 2])
 
