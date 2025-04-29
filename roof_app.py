@@ -48,104 +48,123 @@ def reset_inputs():
 def main():
     st.title("Gable Roof Calculator")
 
-    if st.button("New Calculation"):
-        reset_inputs()
-        st.rerun()
+    st.markdown(
+        """
+        <style>
+        .element-container:nth-child(1) {
+            position: sticky;
+            top: 10px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
-    if "unit" not in st.session_state:
-        st.session_state.unit = "metric (meters)"
-    if "length" not in st.session_state:
-        st.session_state.length = 0.0
-    if "breadth" not in st.session_state:
-        st.session_state.breadth = 0.0
-    if "height" not in st.session_state:
-        st.session_state.height = 0.0
-    if "num_extensions" not in st.session_state:
-        st.session_state.num_extensions = 1
+    col1, col2 = st.columns([1, 2])
 
-    unit = st.selectbox("Select Unit", ["metric (meters)", "imperial (feet)"], index=0, key="unit")
+    with col1:
+        st.subheader("Tutorial Video")
+        st.video("https://youtu.be/jqmUCh_d3QM")
 
-    if "imperial" in unit:
-        length = st.number_input("Length (ft)", min_value=0.0, key="length")
-        breadth = st.number_input("Breadth (ft)", min_value=0.0, key="breadth")
-        height = st.number_input("Height (optional, ft)", min_value=0.0, key="height")
-        conversion_factor = 0.3048
-    else:
-        length = st.number_input("Length (m)", min_value=0.0, key="length")
-        breadth = st.number_input("Breadth (m)", min_value=0.0, key="breadth")
-        height = st.number_input("Height (optional, m)", min_value=0.0, key="height")
-        conversion_factor = 1.0
+    with col2:
+        if st.button("New Calculation"):
+            reset_inputs()
+            st.rerun()
 
-    use_extensions = st.radio("Add Extensions?", ["no", "yes"])
-    extensions = []
+        if "unit" not in st.session_state:
+            st.session_state.unit = "metric (meters)"
+        if "length" not in st.session_state:
+            st.session_state.length = 0.0
+        if "breadth" not in st.session_state:
+            st.session_state.breadth = 0.0
+        if "height" not in st.session_state:
+            st.session_state.height = 0.0
+        if "num_extensions" not in st.session_state:
+            st.session_state.num_extensions = 1
 
-    if use_extensions == "yes":
-        st.number_input("Number of Extensions", min_value=1, step=1, key="num_extensions")
-
-        for i in range(int(st.session_state.num_extensions)):
-            ext_len_key = f"l{i}"
-            ext_brd_key = f"b{i}"
-            ext_qty_key = f"q{i}"
-
-            if ext_len_key not in st.session_state:
-                st.session_state[ext_len_key] = 0.0
-            if ext_brd_key not in st.session_state:
-                st.session_state[ext_brd_key] = 0.0
-            if ext_qty_key not in st.session_state:
-                st.session_state[ext_qty_key] = 1
-
-            st.subheader(f"Extension {i+1}")
-            if "imperial" in unit:
-                l_ext = st.number_input(f"Length of Extension {i+1} (ft)", key=ext_len_key)
-                b_ext = st.number_input(f"Breadth of Extension {i+1} (ft)", key=ext_brd_key)
-            else:
-                l_ext = st.number_input(f"Length of Extension {i+1} (m)", key=ext_len_key)
-                b_ext = st.number_input(f"Breadth of Extension {i+1} (m)", key=ext_brd_key)
-            q_ext = st.number_input(f"Quantity of Extension {i+1}", min_value=1, step=1, key=ext_qty_key)
-
-            extensions.append((l_ext * conversion_factor, b_ext * conversion_factor, q_ext))
-    else:
-        extensions = None
-
-    if st.button("Calculate"):
-        total_area, total_ridge, total_gutter = gable_roof_calculations(
-            length * conversion_factor, breadth * conversion_factor, height * conversion_factor, extensions
-        )
+        unit = st.selectbox("Select Unit", ["metric (meters)", "imperial (feet)"], index=0, key="unit")
 
         if "imperial" in unit:
-            total_area = round(total_area / 0.092903, 2)
-            total_ridge = round(total_ridge / 0.3048, 2)
-            if isinstance(total_gutter, float):
-                total_gutter = round(total_gutter / 0.3048, 2)
-
-        st.subheader("Results")
-        if "metric" in unit:
-            st.write(f"Total Roof Area: {total_area} m²")
-            st.write(f"Total Ridge Length: {total_ridge} m")
-            st.write(f"Total Gutter Length: {total_gutter} m")
+            length = st.number_input("Length (ft)", min_value=0.0, key="length")
+            breadth = st.number_input("Breadth (ft)", min_value=0.0, key="breadth")
+            height = st.number_input("Height (optional, ft)", min_value=0.0, key="height")
+            conversion_factor = 0.3048
         else:
-            st.write(f"Total Roof Area: {total_area} ft²")
-            st.write(f"Total Ridge Length: {total_ridge} ft")
-            st.write(f"Total Gutter Length: {total_gutter} ft")
+            length = st.number_input("Length (m)", min_value=0.0, key="length")
+            breadth = st.number_input("Breadth (m)", min_value=0.0, key="breadth")
+            height = st.number_input("Height (optional, m)", min_value=0.0, key="height")
+            conversion_factor = 1.0
 
-        result_data = {
-            "Total Area": [total_area],
-            "Total Ridge Length": [total_ridge],
-            "Total Gutter Length": [total_gutter],
-            "Unit": ["ft" if "imperial" in unit else "m"]
-        }
-        df_result = pd.DataFrame(result_data)
+        use_extensions = st.radio("Add Extensions?", ["no", "yes"])
+        extensions = []
 
-        csv_buffer = io.StringIO()
-        df_result.to_csv(csv_buffer, index=False)
-        csv_data = csv_buffer.getvalue()
+        if use_extensions == "yes":
+            st.number_input("Number of Extensions", min_value=1, step=1, key="num_extensions")
 
-        st.download_button(
-            label="Download Results as CSV",
-            data=csv_data,
-            file_name="roof_results.csv",
-            mime="text/csv"
-        )
+            for i in range(int(st.session_state.num_extensions)):
+                ext_len_key = f"l{i}"
+                ext_brd_key = f"b{i}"
+                ext_qty_key = f"q{i}"
+
+                if ext_len_key not in st.session_state:
+                    st.session_state[ext_len_key] = 0.0
+                if ext_brd_key not in st.session_state:
+                    st.session_state[ext_brd_key] = 0.0
+                if ext_qty_key not in st.session_state:
+                    st.session_state[ext_qty_key] = 1
+
+                st.subheader(f"Extension {i+1}")
+                if "imperial" in unit:
+                    l_ext = st.number_input(f"Length of Extension {i+1} (ft)", key=ext_len_key)
+                    b_ext = st.number_input(f"Breadth of Extension {i+1} (ft)", key=ext_brd_key)
+                else:
+                    l_ext = st.number_input(f"Length of Extension {i+1} (m)", key=ext_len_key)
+                    b_ext = st.number_input(f"Breadth of Extension {i+1} (m)", key=ext_brd_key)
+                q_ext = st.number_input(f"Quantity of Extension {i+1}", min_value=1, step=1, key=ext_qty_key)
+
+                extensions.append((l_ext * conversion_factor, b_ext * conversion_factor, q_ext))
+        else:
+            extensions = None
+
+        if st.button("Calculate"):
+            total_area, total_ridge, total_gutter = gable_roof_calculations(
+                length * conversion_factor, breadth * conversion_factor, height * conversion_factor, extensions
+            )
+
+            if "imperial" in unit:
+                total_area = round(total_area / 0.092903, 2)
+                total_ridge = round(total_ridge / 0.3048, 2)
+                if isinstance(total_gutter, float):
+                    total_gutter = round(total_gutter / 0.3048, 2)
+
+            st.subheader("Results")
+            if "metric" in unit:
+                st.write(f"Total Roof Area: {total_area} m²")
+                st.write(f"Total Ridge Length: {total_ridge} m")
+                st.write(f"Total Gutter Length: {total_gutter} m")
+            else:
+                st.write(f"Total Roof Area: {total_area} ft²")
+                st.write(f"Total Ridge Length: {total_ridge} ft")
+                st.write(f"Total Gutter Length: {total_gutter} ft")
+
+            result_data = {
+                "Total Area": [total_area],
+                "Total Ridge Length": [total_ridge],
+                "Total Gutter Length": [total_gutter],
+                "Unit": ["ft" if "imperial" in unit else "m"]
+            }
+            df_result = pd.DataFrame(result_data)
+
+            csv_buffer = io.StringIO()
+            df_result.to_csv(csv_buffer, index=False)
+            csv_data = csv_buffer.getvalue()
+
+            st.download_button(
+                label="Download Results as CSV",
+                data=csv_data,
+                file_name="roof_results.csv",
+                mime="text/csv"
+            )
 
 if __name__ == "__main__":
     main()
