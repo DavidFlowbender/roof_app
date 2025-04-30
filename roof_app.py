@@ -6,7 +6,7 @@ import pandas as pd
 # Roof Calculation Function
 def gable_roof_calculations(length, breadth, height=0, extensions=None):
     if height > 0:
-        s = math.sqrt((breadth / 2) ** 2 + height ** 2) / 2
+        s = math.sqrt(((breadth ** 2) / 4) + (height ** 2))
     else:
         s = breadth / math.sqrt(2)
 
@@ -46,7 +46,7 @@ def reset_inputs():
 
 # Main Streamlit UI
 def main():
-    st.title("Gable Roof Calculator")
+    st.title("Simple Roof Calculator")
 
     
 
