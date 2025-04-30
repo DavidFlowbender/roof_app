@@ -3,7 +3,6 @@ import math
 import io
 import pandas as pd
 
-# Roof Calculation Function
 def gable_roof_calculations(length, breadth, height=0, extensions=None):
     if height > 0:
         s = math.sqrt(((breadth ** 2) / 4) + (height ** 2))
@@ -39,16 +38,19 @@ def gable_roof_calculations(length, breadth, height=0, extensions=None):
 
     return total_area, total_ridge, total_gutter
 
-# Reset all input values
 def reset_inputs():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
 
-# Main Streamlit UI
+col_logo, col_text = st.columns([1, 5])
+with col_logo:
+    st.image("logo.png", width=60)  # Replace with your logo URL
+with col_text:
+    st.markdown("---")
+    st.markdown("© Designed by David Akinbode – Data Scientist and Sport Analyst")
+
 def main():
     st.title("Simple Roof Calculator")
-
-    
 
     col1, col2 = st.columns([1, 2])
 
@@ -61,29 +63,9 @@ def main():
             reset_inputs()
             st.rerun()
 
-        if "unit" not in st.session_state:
-            st.session_state.unit = "metric (meters)"
-        if "length" not in st.session_state:
-            st.session_state.length = 0.0
-        if "breadth" not in st.session_state:
-            st.session_state.breadth = 0.0
-        if "height" not in st.session_state:
-            st.session_state.height = 0.0
-        if "num_extensions" not in st.session_state:
-            st.session_state.num_extensions = 1
-
-        unit = st.selectbox("Select Unit", ["metric (meters)", "imperial (feet)"], index=0, key="unit")
-
-        if "imperial" in unit:
-            length = st.number_input("Length (ft)", min_value=0.0, key="length")
-            breadth = st.number_input("Breadth (ft)", min_value=0.0, key="breadth")
-            height = st.number_input("Height (optional, ft)", min_value=0.0, key="height")
-            conversion_factor = 0.3048
-        else:
-            length = st.number_input("Length (m)", min_value=0.0, key="length")
-            breadth = st.number_input("Breadth (m)", min_value=0.0, key="breadth")
-            height = st.number_input("Height (optional, m)", min_value=0.0, key="height")
-            conversion_factor = 1.0
+        length = st.number_input("Length (m)", min_value=0.0, key="length")
+        breadth = st.number_input("Breadth (m)", min_value=0.0, key="breadth")
+        height = st.number_input("Height (optional, m)", min_value=0.0, key="height")
 
         use_extensions = st.radio("Add Extensions?", ["no", "yes"])
         extensions = []
@@ -104,44 +86,35 @@ def main():
                     st.session_state[ext_qty_key] = 1
 
                 st.subheader(f"Extension {i+1}")
-                if "imperial" in unit:
-                    l_ext = st.number_input(f"Length of Extension {i+1} (ft)", key=ext_len_key)
-                    b_ext = st.number_input(f"Breadth of Extension {i+1} (ft)", key=ext_brd_key)
-                else:
-                    l_ext = st.number_input(f"Length of Extension {i+1} (m)", key=ext_len_key)
-                    b_ext = st.number_input(f"Breadth of Extension {i+1} (m)", key=ext_brd_key)
+                l_ext = st.number_input(f"Length of Extension {i+1} (m)", key=ext_len_key)
+                b_ext = st.number_input(f"Breadth of Extension {i+1} (m)", key=ext_brd_key)
                 q_ext = st.number_input(f"Quantity of Extension {i+1}", min_value=1, step=1, key=ext_qty_key)
 
-                extensions.append((l_ext * conversion_factor, b_ext * conversion_factor, q_ext))
+                extensions.append((l_ext, b_ext, q_ext))
         else:
             extensions = None
 
         if st.button("Calculate"):
-            total_area, total_ridge, total_gutter = gable_roof_calculations(
-                length * conversion_factor, breadth * conversion_factor, height * conversion_factor, extensions
-            )
+            area, ridge, gutter = gable_roof_calculations(length, breadth, height, extensions)
+            st.session_state.total_area = area
+            st.session_state.total_ridge = ridge
+            st.session_state.total_gutter = gutter
 
-            if "imperial" in unit:
-                total_area = round(total_area / 0.092903, 2)
-                total_ridge = round(total_ridge / 0.3048, 2)
-                if isinstance(total_gutter, float):
-                    total_gutter = round(total_gutter / 0.3048, 2)
-
+        if "total_area" in st.session_state:
             st.subheader("Results")
-            if "metric" in unit:
-                st.write(f"Total Roof Area: {total_area} m²")
-                st.write(f"Total Ridge Length: {total_ridge} m")
-                st.write(f"Total Gutter Length: {total_gutter} m")
-            else:
-                st.write(f"Total Roof Area: {total_area} ft²")
-                st.write(f"Total Ridge Length: {total_ridge} ft")
-                st.write(f"Total Gutter Length: {total_gutter} ft")
+            st.write(f"Total Roof Area: {st.session_state.total_area} m²")
+            st.write(f"Total Ridge Length: {st.session_state.total_ridge} m")
+            st.write(f"Total Gutter Length: {st.session_state.total_gutter} m")
+
+            percentage = st.slider("Increase Roof Area by (%)", 0, 100, 0, key="area_increase")
+            increased_area = round(st.session_state.total_area * (1 + percentage / 100), 2)
+            if percentage > 0:
+                st.write(f"Adjusted Roof Area (+{percentage}%): {increased_area} m²")
 
             result_data = {
-                "Total Area": [total_area],
-                "Total Ridge Length": [total_ridge],
-                "Total Gutter Length": [total_gutter],
-                "Unit": ["ft" if "imperial" in unit else "m"]
+                "Total Area (m²)": [st.session_state.total_area],
+                "Total Ridge Length (m)": [st.session_state.total_ridge],
+                "Total Gutter Length (m)": [st.session_state.total_gutter]
             }
             df_result = pd.DataFrame(result_data)
 
@@ -158,3 +131,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    st.markdown("---")
+    st.markdown("© Designed by David Akinbode – Data Scientist and Sport Analyst")
