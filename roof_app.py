@@ -131,5 +131,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    st.markdown("---")
-    st.markdown("© Designed by David Akinbode – Data Scientist and Sport Analyst")
