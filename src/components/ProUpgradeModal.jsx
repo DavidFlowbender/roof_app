@@ -21,6 +21,7 @@ export default function ProUpgradeModal({
   proEmail = '',
   proAccessToken = '',
   proQuota = null,
+  initialError = '',
   onAuthSuccess,
   onRefreshStatus,
   onSignOut,
@@ -475,7 +476,9 @@ export default function ProUpgradeModal({
                   }}
                 />
 
-                {errorMsg && <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg}</div>}
+                {(errorMsg || initialError) && (
+                  <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                )}
                 {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
 
                 <button
