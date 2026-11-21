@@ -152,11 +152,22 @@ export default function App() {
       setProQuota(null);
       return;
     }
-    if (status.session && status.session !== activeSession) {
-      setProSession(status.session);
+    const verifiedSession = status.session || activeSession;
+    let finalStatus = status;
+    if (!status.isPro) {
+      const paymentCheck = await verifyPaystackPaymentOnReturn(verifiedSession.access_token);
+      if (paymentCheck.verified) {
+        finalStatus = await fetchSupabaseProProfile(verifiedSession);
+        if (finalStatus.isPro) {
+          confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+        }
+      }
     }
-    setIsPremium(status.isPro);
-    setProQuota(status.quota);
+    if (finalStatus.session && finalStatus.session !== activeSession) {
+      setProSession(finalStatus.session);
+    }
+    setIsPremium(finalStatus.isPro);
+    setProQuota(finalStatus.quota);
   };
 
   useEffect(() => {
@@ -173,7 +184,9 @@ export default function App() {
       }
 
       const activeSession = initialStatus.session || proSession;
-      const paymentCheck = await verifyPaystackPaymentOnReturn(activeSession.access_token);
+      const paymentCheck = initialStatus.isPro
+        ? { checked: false, verified: false, fromUrl: false, error: '' }
+        : await verifyPaystackPaymentOnReturn(activeSession.access_token);
       if (cancelled) return;
 
       const finalStatus = paymentCheck.verified
@@ -190,6 +203,9 @@ export default function App() {
 
       if (paymentCheck.verified && finalStatus.isPro) {
         confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+      } else if (!paymentCheck.verified && paymentCheck.fromUrl && paymentCheck.error) {
+        setProAuthError(paymentCheck.error);
+        setProModalOpen(true);
       }
     })();
     return () => {
@@ -348,8 +364,13 @@ export default function App() {
         setProSession(session);
         return;
       }
-      const syncedSession = await syncDevAuthSession(getStoredAuthSession());
-      if (!cancelled && syncedSession?.access_token) {
+      const storedSession = getStoredAuthSession();
+      const syncedSession = await syncDevAuthSession(storedSession);
+      if (
+        !cancelled &&
+        syncedSession?.access_token &&
+        syncedSession.access_token !== storedSession?.access_token
+      ) {
         setProSession(syncedSession);
       }
     })();

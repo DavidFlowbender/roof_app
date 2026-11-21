@@ -6,6 +6,39 @@
 const AUTH_SESSION_KEY = 'roofcalc_supabase_session_v1';
 const PRO_STATUS_CACHE_KEY = 'roofcalc_pro_status_v1';
 const PREVIEW_PRO_KEY = 'roofcalc_preview_pro_v1';
+const PENDING_PAYSTACK_REF_KEY = 'roofcalc_pending_paystack_ref_v1';
+const PENDING_PAYSTACK_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function savePendingPaystackRef(reference) {
+  try {
+    if (!reference) {
+      localStorage.removeItem(PENDING_PAYSTACK_REF_KEY);
+      return;
+    }
+    localStorage.setItem(
+      PENDING_PAYSTACK_REF_KEY,
+      JSON.stringify({ reference: String(reference).trim(), savedAt: Date.now() })
+    );
+  } catch {
+    // Ignore private-mode storage errors
+  }
+}
+
+export function getPendingPaystackRef() {
+  try {
+    const raw = localStorage.getItem(PENDING_PAYSTACK_REF_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    if (!parsed?.reference) return '';
+    if (parsed.savedAt && Date.now() - Number(parsed.savedAt) > PENDING_PAYSTACK_TTL_MS) {
+      localStorage.removeItem(PENDING_PAYSTACK_REF_KEY);
+      return '';
+    }
+    return String(parsed.reference).trim();
+  } catch {
+    return '';
+  }
+}
 
 export function getStoredProStatus() {
   try {
@@ -354,36 +387,48 @@ export async function startPaystackCheckout(accessToken, fallbackEmail = '') {
   if (!data?.authorization_url) {
     throw new Error('Checkout endpoint did not return a payment URL.');
   }
+  // Persist Paystack transaction reference so Bank Transfer / Back-button returns can still verify automatically
+  if (data?.reference) {
+    savePendingPaystackRef(data.reference);
+  }
   return data.authorization_url;
 }
 
 export async function verifyPaystackPaymentOnReturn(accessToken) {
   if (typeof window === 'undefined' || !accessToken) {
-    return { checked: false, verified: false, error: '' };
+    return { checked: false, verified: false, fromUrl: false, error: '' };
   }
 
   const url = new URL(window.location.href);
-  const reference = url.searchParams.get('reference') || url.searchParams.get('trxref') || '';
+  const urlReference = (url.searchParams.get('reference') || url.searchParams.get('trxref') || '').trim();
   const hasVerifyFlag = url.searchParams.get('paystack_verify') === '1';
+  const fromUrl = Boolean(urlReference || hasVerifyFlag);
 
-  if (!reference && !hasVerifyFlag) {
-    return { checked: false, verified: false, error: '' };
+  if (fromUrl) {
+    // Clean Paystack return query params so refreshes don't replay URL params.
+    url.searchParams.delete('paystack_verify');
+    url.searchParams.delete('reference');
+    url.searchParams.delete('trxref');
+    const cleanSearch = url.searchParams.toString();
+    window.history.replaceState(
+      {},
+      '',
+      `${url.pathname}${cleanSearch ? `?${cleanSearch}` : ''}${url.hash || ''}`
+    );
   }
 
-  // Clean Paystack return query params immediately so refreshes don't replay verification.
-  url.searchParams.delete('paystack_verify');
-  url.searchParams.delete('reference');
-  url.searchParams.delete('trxref');
-  const cleanSearch = url.searchParams.toString();
-  window.history.replaceState(
-    {},
-    '',
-    `${url.pathname}${cleanSearch ? `?${cleanSearch}` : ''}${url.hash || ''}`
-  );
-
+  const reference = urlReference || getPendingPaystackRef();
   if (!reference) {
-    return { checked: true, verified: false, error: 'Missing Paystack transaction reference.' };
+    return {
+      checked: fromUrl,
+      verified: false,
+      fromUrl,
+      error: hasVerifyFlag ? 'Missing Paystack transaction reference.' : '',
+    };
   }
+
+  // Save reference in case verification is interrupted mid-flight
+  savePendingPaystackRef(reference);
 
   try {
     const resp = await fetch('/api/verify-payment', {
@@ -396,17 +441,27 @@ export async function verifyPaystackPaymentOnReturn(accessToken) {
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
+      // Clear pending ref on terminal mismatch (400/403); keep on 402 (bank transfer still processing) or transient 5xx
+      if (resp.status === 400 || resp.status === 403) {
+        savePendingPaystackRef(null);
+      }
       return {
         checked: true,
         verified: false,
+        fromUrl,
         error: data?.error || `Payment verification failed (${resp.status}).`,
       };
     }
-    return { checked: true, verified: Boolean(data?.verified), error: '' };
+    const verified = Boolean(data?.verified);
+    if (verified) {
+      savePendingPaystackRef(null);
+    }
+    return { checked: true, verified, fromUrl, error: '' };
   } catch (err) {
     return {
       checked: true,
       verified: false,
+      fromUrl,
       error: err?.message || 'Network error while verifying payment.',
     };
   }

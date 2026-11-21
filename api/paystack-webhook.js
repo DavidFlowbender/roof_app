@@ -16,17 +16,23 @@ export default async function handler(req, res) {
   }
 
   const secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim();
+  const webhookSecret = (process.env.PAYSTACK_WEBHOOK_SECRET || '').trim();
   const { supabaseUrl, supabaseServiceKey } = getSupabaseConfig();
 
-  if (!secretKey || !supabaseUrl || !supabaseServiceKey) {
+  if ((!secretKey && !webhookSecret) || !supabaseUrl || !supabaseServiceKey) {
     return res.status(503).json({ error: 'Webhook backend environment variables are not configured.' });
   }
 
   const signature = req.headers['x-paystack-signature'];
   const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-  const expectedSig = crypto.createHmac('sha512', secretKey).update(rawBody).digest('hex');
+  const candidateKeys = [secretKey, webhookSecret].filter(Boolean);
+  const signatureValid =
+    Boolean(signature) &&
+    candidateKeys.some(
+      (k) => crypto.createHmac('sha512', k).update(rawBody).digest('hex') === signature
+    );
 
-  if (!signature || signature !== expectedSig) {
+  if (!signatureValid) {
     return res.status(401).json({ error: 'Invalid Paystack signature' });
   }
 
