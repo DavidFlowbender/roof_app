@@ -26,24 +26,7 @@ def gable_roof_calculations(length, breadth, height=0, extensions=None):
             total_gutter += q_ext * r_ext
 
         total_area += RnBn
-    else:
-        total_area = s * (top_ridge + length) + (breadth * s)
-        total_ridge = 4 * ridge + top_ridge
-        total_gutter = "No gutter expected"
-
-    total_area = round(total_area, 2)
-    total_ridge = round(total_ridge, 2)
-    if isinstance(total_gutter, float):
-        total_gutter = round(total_gutter, 2)
-
-    return total_area, total_ridge, total_gutter
-
-def reset_inputs():
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-
-col_logo, col_text = st.columns([1, 5])
-with col_logo:
+    else: 
     st.image("logo.png", width=60)  # Replace with your logo URL
 with col_text:
     st.markdown("---")

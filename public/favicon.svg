@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="sijitekGrad" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#0ea5e9" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#0f172a" />
+  <rect x="4" y="4" width="56" height="56" rx="13" fill="url(#sijitekGrad)" fill-opacity="0.16" stroke="url(#sijitekGrad)" stroke-width="2.5" />
+  <text x="32" y="45" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-weight="900" font-size="38" fill="url(#sijitekGrad)">S</text>
+</svg>
