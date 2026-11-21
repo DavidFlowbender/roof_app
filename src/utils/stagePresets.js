@@ -21,14 +21,14 @@ export const BUILDING_STAGES = [
     bgLight: 'rgba(16, 185, 129, 0.1)',
     borderLight: 'rgba(16, 185, 129, 0.3)',
     demandedFields: ['length', 'breadth'],
-    presetNotice: 'Standard residential roof (Kingpost = half breadth, 45° / 12:12 pitch, 0.45m eaves) applied.',
+    presetNotice: 'Foundation level: +0.5m eaves added automatically on both sides (editable, e.g. 0.6m) with 45° / 12:12 pitch.',
     defaults: {
       roofType: 'hip',
       pitchMode: 'ratio',
       pitchRatio: 12, // 12:12 (45°), Kingpost Height = Breadth / 2
       pitchAngle: 45.0,
       heightVal: 2.0,
-      overhang: { front: 0.45, back: 0.45, left: 0.45, right: 0.45 },
+      overhang: { front: 0.5, back: 0.5, left: 0.5, right: 0.5 },
       isUniformOverhang: true,
       wastePercentage: 10,
       parapet: {
@@ -51,29 +51,29 @@ export const BUILDING_STAGES = [
     shortName: 'Parapet',
     badge: '🧱 Concrete Parapet',
     tagline: 'Outward Parapet Fascia',
-    summary: 'Cast concrete parapet extends outward from the wall top; the roof lays cleanly on top with zero hidden area. Only added to roof dimensions when your sketch does not already include it.',
+    summary: 'Cast concrete parapet is already included in your measured drawing — base dimensions stay exact (+0m).',
     iconName: 'Layers',
     color: '#06b6d4', // cyan/sky
     bgLight: 'rgba(6, 182, 212, 0.1)',
     borderLight: 'rgba(6, 182, 212, 0.3)',
     demandedFields: ['length', 'breadth', 'parapetStyle'],
-    presetNotice: 'Outward concrete parapet preset applied: +0.45m outward projection added to wall footprint (set to 0m if sketch already includes parapet).',
+    presetNotice: 'Parapet level active: drawing dimensions remain exact (+0m extra overhang).',
     defaults: {
       roofType: 'hip',
       pitchMode: 'ratio',
       pitchRatio: 12, // Standard full-visibility 45° (12:12) pitch laying directly on parapet
       pitchAngle: 45.0,
       heightVal: 2.0,
-      overhang: { front: 0.45, back: 0.45, left: 0.45, right: 0.45 },
+      overhang: { front: 0, back: 0, left: 0, right: 0 },
       isUniformOverhang: true,
       wastePercentage: 10,
       parapet: {
         enabled: true,
         height: 0.42, // Stepped concrete parapet fascia height (0.42m cornice at wall top)
-        projection: 0.45, // Horizontal outward extension beyond wall
+        projection: 0.45, // Visual parapet cornice depth
         wallThickness: 0.225, // 9" block
         style: 'fascia_overhang', // Always outward-extending; roof sits on top, never hidden
-        includedInSketch: false, // false = Foundation/wall sketch without parapet yet
+        includedInSketch: true, // Drawn dimensions already measure parapet-to-parapet
         troughWidth: 0.4,
         includeCoping: true,
       },
@@ -96,14 +96,14 @@ export const BUILDING_STAGES = [
     bgLight: 'rgba(245, 158, 11, 0.1)',
     borderLight: 'rgba(245, 158, 11, 0.3)',
     demandedFields: ['length', 'breadth', 'slantingHeight', 'measuredOverhang'],
-    presetNotice: 'Asks for measured Slanting Height (H), or auto-applies angle-dependent preset H.',
+    presetNotice: 'Woodwork level active: base dimensions remain exact (+0m extra overhang) with adjustable kingpost/angle and timber BOQ.',
     defaults: {
       roofType: 'hip',
       pitchMode: 'angle',
       pitchRatio: 12,
       pitchAngle: 45.0,
       heightVal: 2.5,
-      overhang: { front: 0.5, back: 0.5, left: 0.5, right: 0.5 },
+      overhang: { front: 0, back: 0, left: 0, right: 0 },
       isUniformOverhang: true,
       wastePercentage: 10,
       parapet: {

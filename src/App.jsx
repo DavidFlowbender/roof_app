@@ -242,10 +242,10 @@ export default function App() {
   const [parapetConfig, setParapetConfig] = useState(() => ({
     enabled: readStoredActiveDesign()?.buildingStage === 'parapet',
     height: 0.42, // stepped outward concrete parapet cornice height
-    projection: 0.45, // horizontal outward extension from building wall
+    projection: 0.45, // visual concrete parapet depth
     wallThickness: 0.225, // 9-inch standard block
     style: 'fascia_overhang', // outward-extending concrete parapet; roof rests cleanly on top
-    includedInSketch: false, // false = add parapet projection onto wall sketch; true = sketch already includes parapet
+    includedInSketch: true, // Parapet level drawing dimensions stay exact (+0m)
     includeCoping: true,
   }));
 
@@ -275,9 +275,20 @@ export default function App() {
   const [roofType, setRoofType] = useState(() => readStoredActiveDesign()?.roofType || 'hip');
   const [length, setLength] = useState(() => Number(readStoredActiveDesign()?.length) || 12.0);
   const [breadth, setBreadth] = useState(() => Number(readStoredActiveDesign()?.breadth) || 8.0);
+  const [foundationOverhangM, setFoundationOverhangM] = useState(() => {
+    const saved = readStoredActiveDesign();
+    if (saved?.buildingStage === 'foundation' && Number.isFinite(Number(saved?.overhang?.front))) {
+      return Math.max(0, Number(saved.overhang.front));
+    }
+    return 0.5;
+  });
   const [overhang, setOverhang] = useState(() => {
-    const ov = readStoredActiveDesign()?.overhang;
-    return ov && typeof ov === 'object' ? ov : { front: 0.45, back: 0.45, left: 0.45, right: 0.45 };
+    const saved = readStoredActiveDesign();
+    if (saved?.overhang && typeof saved.overhang === 'object') return saved.overhang;
+    if (saved?.buildingStage === 'parapet' || saved?.buildingStage === 'woodwork') {
+      return { front: 0, back: 0, left: 0, right: 0 };
+    }
+    return { front: 0.5, back: 0.5, left: 0.5, right: 0.5 };
   });
   const [isUniformOverhang, setIsUniformOverhang] = useState(true);
   const [hasActiveDesign, setHasActiveDesign] = useState(() =>
@@ -472,31 +483,31 @@ export default function App() {
     const cfg = getStageConfig(stageId);
 
     if (stageId === 'foundation') {
+      const fOv = Math.max(0, Number(foundationOverhangM) || 0);
       setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
       setPitchRatio(cfg.defaults.pitchRatio);
       setPitchAngle(cfg.defaults.pitchAngle);
       setWoodworkAngle(cfg.defaults.pitchAngle);
-      setOverhang(cfg.defaults.overhang);
+      setOverhang({ front: fOv, back: fOv, left: fOv, right: fOv });
       setIsUniformOverhang(true);
       setParapetConfig((prev) => ({ ...prev, enabled: false }));
       setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: false }));
     } else if (stageId === 'parapet') {
-      const proj = parapetConfig.projection || cfg.defaults.parapet?.projection || 0.45;
-      const effOv = parapetConfig.includedInSketch ? 0 : proj;
       setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
       setPitchRatio(cfg.defaults.pitchRatio); // 12:12 full roof laying cleanly on parapet
       setPitchAngle(cfg.defaults.pitchAngle);
       setWoodworkAngle(cfg.defaults.pitchAngle);
-      setOverhang({ front: effOv, back: effOv, left: effOv, right: effOv });
+      setOverhang({ front: 0, back: 0, left: 0, right: 0 });
       setIsUniformOverhang(true);
       setParapetConfig((prev) => ({
         ...prev,
         enabled: true,
         height: 0.42,
-        projection: proj,
+        projection: prev.projection || 0.45,
         style: 'fascia_overhang',
+        includedInSketch: true,
       }));
       setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: false }));
     } else if (stageId === 'woodwork') {
@@ -506,11 +517,19 @@ export default function App() {
       setWoodworkAngle(cfg.defaults.pitchAngle);
       setHasSlantingHeight(true);
       setSlantingHeightInput('');
-      setOverhang(cfg.defaults.overhang);
+      setOverhang({ front: 0, back: 0, left: 0, right: 0 });
       setIsUniformOverhang(true);
       setParapetConfig((prev) => ({ ...prev, enabled: false }));
       setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: true }));
     }
+  };
+
+  const handleFoundationOverhangChange = (val) => {
+    const parsed = Number(val);
+    const clamped = Number.isFinite(parsed) ? Math.round(Math.max(0, Math.min(2.0, parsed)) * 100) / 100 : 0;
+    setFoundationOverhangM(clamped);
+    setOverhang({ front: clamped, back: clamped, left: clamped, right: clamped });
+    setIsUniformOverhang(true);
   };
 
   // Angle-dependent preset Slanting Height (H) in meters
@@ -602,6 +621,24 @@ export default function App() {
     }
   };
 
+  const handleTweakPitchAngle = (newAngleDeg) => {
+    const deg = Math.round(Math.max(5, Math.min(68, Number(newAngleDeg) || 5)) * 10) / 10;
+    setKingpostOverrideM(null);
+    setPitchMode('angle');
+    setPitchAngle(deg);
+    setWoodworkAngle(deg);
+    const kp = Math.round(calculateRoofHeight('angle', deg, breadth, roofType, overhang, polygonVertices) * 100) / 100;
+    setHeightVal(kp);
+    if (buildingStage === 'woodwork' && hasSlantingHeight && slantingHeightInput !== '') {
+      const slantM = calculateSlantingHeightFromAngle(deg, breadth, overhang, roofType, polygonVertices);
+      const dispH =
+        unitSystem === UNIT_SYSTEMS.IMPERIAL
+          ? metersToFeet(slantM).toFixed(2)
+          : slantM.toFixed(2);
+      setSlantingHeightInput(dispH);
+    }
+  };
+
   const handleTweakSlantingHeight = (newSlantMeters) => {
     const minValid = currentRunM + 0.05;
     const sM = Math.max(minValid, Math.min(22, Number(newSlantMeters) || minValid));
@@ -630,21 +667,25 @@ export default function App() {
     setRoofType(payload.roofType || 'hip');
     setLength(payload.length || 12);
     setBreadth(payload.breadth || 8);
-    setOverhang(payload.overhang || { front: 0.45, back: 0.45, left: 0.45, right: 0.45 });
+    const stageOv =
+      nextStage === 'foundation'
+        ? Math.max(0, Number(payload.overhang?.front ?? foundationOverhangM) || 0.5)
+        : 0;
+    if (nextStage === 'foundation') setFoundationOverhangM(stageOv);
+    setOverhang({ front: stageOv, back: stageOv, left: stageOv, right: stageOv });
     setIsUniformOverhang(true);
     setPolygonVertices(payload.polygonVertices || null);
     setExtensions(payload.extensions || []);
     setSketchUnderlayImage(payload.sketchUnderlayImage || null);
 
     if (nextStage === 'parapet') {
-      const ovFront = Number(payload.overhang?.front) || 0;
       setParapetConfig((prev) => ({
         ...prev,
         enabled: true,
         height: payload.parapetHeight || 0.42,
-        projection: ovFront > 0 ? ovFront : prev.projection || 0.45,
+        projection: prev.projection || 0.45,
         style: 'fascia_overhang',
-        includedInSketch: ovFront === 0,
+        includedInSketch: true,
       }));
       setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: false }));
     } else if (nextStage === 'woodwork') {
@@ -2324,7 +2365,10 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
           handleRemoveExtension={handleRemoveExtension}
           handleUpdateExtension={handleUpdateExtension}
           handleTweakKingpost={handleTweakKingpost}
+          handleTweakPitchAngle={handleTweakPitchAngle}
           handleTweakSlantingHeight={handleTweakSlantingHeight}
+          foundationOverhangM={foundationOverhangM}
+          handleFoundationOverhangChange={handleFoundationOverhangChange}
           applyPreset={applyPreset}
           selectedMaterial={selectedMaterial}
           setSelectedMaterial={setSelectedMaterial}

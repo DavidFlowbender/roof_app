@@ -66,7 +66,10 @@ export default function RevitWorkspace({
   handleAddExtension,
   handleRemoveExtension,
   handleTweakKingpost,
+  handleTweakPitchAngle,
   handleTweakSlantingHeight,
+  foundationOverhangM = 0.5,
+  handleFoundationOverhangChange,
   applyPreset,
   selectedMaterial,
   setSelectedMaterial,
@@ -150,6 +153,9 @@ export default function RevitWorkspace({
         onResetToBlank={onResetToBlank}
         onActivateRectangle={onActivateRectangle}
         handleTweakKingpost={handleTweakKingpost}
+        handleTweakPitchAngle={handleTweakPitchAngle}
+        foundationOverhangM={foundationOverhangM}
+        handleFoundationOverhangChange={handleFoundationOverhangChange}
         selectedMaterial={selectedMaterial}
         setSelectedMaterial={setSelectedMaterial}
         customPrices={customPrices}
@@ -648,90 +654,189 @@ export default function RevitWorkspace({
                     onChange={(e) => handleBreadthChange(e.target.value)}
                   />
                 </label>
-                <label title="Roof overhang beyond walls (eaves)">
-                  <span>Eaves</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.05"
-                    value={overhang.front}
-                    onChange={(e) => {
-                      const v = Math.max(0, Number(e.target.value) || 0);
-                      setOverhang({ front: v, back: v, left: v, right: v });
-                      setIsUniformOverhang(true);
-                    }}
-                  />
-                </label>
               </div>
             )}
           </div>
 
-          {/* Parapet Consideration Toggle (when Parapet active) */}
-          {(buildingStage === 'parapet' || parapetConfig?.enabled) && (
+          {/* Stage-Specific Overhang / Eaves Projection */}
+          {buildingStage === 'foundation' ? (
             <div
               className="studio-control-group"
-              title="Only add outward parapet width to roof calculations if your original sketch shows walls only (e.g. Foundation sketch)"
+              title="Foundation level automatically adds this overhang on both sides (editable, e.g. 0.5m or 0.6m)"
             >
-              <span className="studio-control-label">Parapet</span>
-              <div className="studio-segmented">
+              <span className="studio-control-label">Eaves (+/side)</span>
+              <div className="studio-stepper" style={{ gap: '3px' }}>
                 <button
                   type="button"
-                  className={!parapetConfig?.includedInSketch ? 'active' : ''}
-                  onClick={() => {
-                    const proj = parapetConfig?.projection || 0.45;
-                    setParapetConfig({
-                      ...parapetConfig,
-                      enabled: true,
-                      style: 'fascia_overhang',
-                      includedInSketch: false,
-                    });
-                    setOverhang({ front: proj, back: proj, left: proj, right: proj });
-                    setIsUniformOverhang(true);
-                  }}
+                  onClick={() =>
+                    handleFoundationOverhangChange
+                      ? handleFoundationOverhangChange(Math.max(0, (Number(foundationOverhangM) || 0) - 0.05))
+                      : setOverhang({
+                          front: Math.max(0, (overhang.front || 0) - 0.05),
+                          back: Math.max(0, (overhang.front || 0) - 0.05),
+                          left: Math.max(0, (overhang.front || 0) - 0.05),
+                          right: Math.max(0, (overhang.front || 0) - 0.05),
+                        })
+                  }
+                  title="Decrease eaves projection by 0.05m"
                 >
-                  +Add {parapetConfig?.projection || 0.45}m (Wall Sketch)
+                  &minus;
                 </button>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.05"
+                  aria-label="Foundation eaves per side (m)"
+                  value={foundationOverhangM}
+                  onChange={(e) =>
+                    handleFoundationOverhangChange
+                      ? handleFoundationOverhangChange(e.target.value)
+                      : setOverhang({
+                          front: Math.max(0, Number(e.target.value) || 0),
+                          back: Math.max(0, Number(e.target.value) || 0),
+                          left: Math.max(0, Number(e.target.value) || 0),
+                          right: Math.max(0, Number(e.target.value) || 0),
+                        })
+                  }
+                  style={{
+                    width: '48px',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#34d399',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    textAlign: 'center',
+                  }}
+                />
+                <span style={{ fontSize: '11px', color: '#94a3b8', marginRight: '2px' }}>m</span>
                 <button
                   type="button"
-                  className={parapetConfig?.includedInSketch ? 'active' : ''}
-                  onClick={() => {
-                    setParapetConfig({
-                      ...parapetConfig,
-                      enabled: true,
-                      style: 'fascia_overhang',
-                      includedInSketch: true,
-                    });
-                    setOverhang({ front: 0, back: 0, left: 0, right: 0 });
-                    setIsUniformOverhang(true);
-                  }}
+                  onClick={() =>
+                    handleFoundationOverhangChange
+                      ? handleFoundationOverhangChange((Number(foundationOverhangM) || 0) + 0.05)
+                      : setOverhang({
+                          front: (overhang.front || 0) + 0.05,
+                          back: (overhang.front || 0) + 0.05,
+                          left: (overhang.front || 0) + 0.05,
+                          right: (overhang.front || 0) + 0.05,
+                        })
+                  }
+                  title="Increase eaves projection by 0.05m"
                 >
-                  In Sketch (+0m)
+                  +
                 </button>
               </div>
             </div>
+          ) : (
+            <div
+              className="studio-control-group"
+              title="Parapet & Woodwork base dimensions stay exact (+0m added)"
+            >
+              <span className="studio-control-label">Base</span>
+              <span
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24',
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid #334155',
+                  borderRadius: '7px',
+                  padding: '4px 9px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Exact (+0m)
+              </span>
+            </div>
           )}
 
-          {/* Roof Height / Slope */}
+          {/* Kingpost Height & Pitch Angle (coupled — edit either one) */}
           <div className="studio-control-group">
-            <span className="studio-control-label">Roof Height</span>
-            <div className="studio-stepper">
+            <span className="studio-control-label">Kingpost</span>
+            <div className="studio-stepper" style={{ gap: '2px' }}>
               <button
                 type="button"
-                onClick={() => handleTweakKingpost(Math.max(0.4, geometry.roofHeight - 0.1))}
-                title="Lower roof peak"
+                onClick={() => handleTweakKingpost(Math.max(0.2, geometry.roofHeight - 0.1))}
+                title="Lower kingpost height"
               >
                 &minus;
               </button>
-              <span className="studio-stepper-val">{geometry.roofHeight.toFixed(2)}m</span>
+              <input
+                type="number"
+                min="0.2"
+                max="8.5"
+                step="0.1"
+                aria-label="Kingpost height (m)"
+                value={Number(geometry.roofHeight.toFixed(2))}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v >= 0.2) handleTweakKingpost(v);
+                }}
+                style={{
+                  width: '50px',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: '#f8fafc',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  textAlign: 'center',
+                }}
+              />
+              <span style={{ fontSize: '11px', color: '#94a3b8', marginRight: '2px' }}>m</span>
               <button
                 type="button"
                 onClick={() => handleTweakKingpost(geometry.roofHeight + 0.1)}
-                title="Raise roof peak"
+                title="Raise kingpost height"
               >
                 +
               </button>
             </div>
-            <span className="studio-pitch-badge">{geometry.pitchDegrees}&deg;</span>
+          </div>
+
+          <div className="studio-control-group">
+            <span className="studio-control-label">Angle</span>
+            <div className="studio-stepper" style={{ gap: '2px' }}>
+              <button
+                type="button"
+                onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry.pitchDegrees || 30) - 1))}
+                title="Decrease pitch angle"
+              >
+                &minus;
+              </button>
+              <input
+                type="number"
+                min="5"
+                max="68"
+                step="1"
+                aria-label="Roof pitch angle (degrees)"
+                value={Number(geometry.pitchDegrees || 0)}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                }}
+                style={{
+                  width: '42px',
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  color: '#38bdf8',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  textAlign: 'center',
+                }}
+              />
+              <span style={{ fontSize: '11px', color: '#38bdf8', marginRight: '2px' }}>&deg;</span>
+              <button
+                type="button"
+                onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.min(68, (geometry.pitchDegrees || 30) + 1))}
+                title="Increase pitch angle"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           {/* More Options Toggle */}
@@ -787,24 +892,6 @@ export default function RevitWorkspace({
               </button>
             </div>
           </div>
-
-          {isCustomShape && (
-            <div className="studio-drawer-item">
-              <label>Eaves Overhang (m)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.05"
-                value={overhang.front}
-                onChange={(e) => {
-                  const v = Math.max(0, Number(e.target.value) || 0);
-                  setOverhang({ front: v, back: v, left: v, right: v });
-                  setIsUniformOverhang(true);
-                }}
-                style={{ width: '70px' }}
-              />
-            </div>
-          )}
 
           <div className="studio-drawer-item">
             <label>Waste Allowance (+{wastePercentage}%)</label>

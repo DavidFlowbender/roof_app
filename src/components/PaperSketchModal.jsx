@@ -262,9 +262,11 @@ export default function PaperSketchModal({
       const nextL = Math.max(1.0, Number(result.length) || 10.0);
       const nextB = Math.max(1.0, Number(result.breadth) || 7.0);
       const nextOv =
-        result.overhang !== null && result.overhang !== undefined
-          ? Math.max(0, Number(result.overhang))
-          : activeStage.defaultOverhang;
+        initialStage === 'foundation'
+          ? result.overhang !== null && result.overhang !== undefined
+            ? Math.max(0, Number(result.overhang))
+            : 0.5
+          : 0;
 
       let nextPoly = null;
       if (nextShape !== 'rectangle') {

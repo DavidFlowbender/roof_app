@@ -49,6 +49,9 @@ export default function MobileWorkspace({
   onResetToBlank = null,
   onActivateRectangle = null,
   handleTweakKingpost,
+  handleTweakPitchAngle = null,
+  foundationOverhangM = 0.5,
+  handleFoundationOverhangChange = null,
   selectedMaterial,
   setSelectedMaterial,
   customPrices,
@@ -1049,6 +1052,97 @@ export default function MobileWorkspace({
                 </div>
               )}
 
+              {/* Foundation Eaves (+0.5m each side, editable) vs Parapet/Woodwork (+0m exact) */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  padding: '5px 10px',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  borderBottom: '1px solid #1e293b',
+                  fontSize: '11px',
+                }}
+              >
+                {buildingStage === 'foundation' ? (
+                  <>
+                    <span style={{ color: '#94a3b8', fontWeight: 600 }}>
+                      Eaves (+both sides):
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleFoundationOverhangChange &&
+                          handleFoundationOverhangChange(Math.max(0, (Number(foundationOverhangM) || 0) - 0.05))
+                        }
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '6px',
+                          background: '#1e293b',
+                          color: '#f8fafc',
+                          border: '1px solid #334155',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        max="2"
+                        step="0.05"
+                        aria-label="Foundation eaves per side (m)"
+                        value={foundationOverhangM}
+                        onChange={(e) =>
+                          handleFoundationOverhangChange && handleFoundationOverhangChange(e.target.value)
+                        }
+                        style={{
+                          width: '48px',
+                          background: '#090e1a',
+                          color: '#34d399',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '2px 4px',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          textAlign: 'center',
+                        }}
+                      />
+                      <span style={{ color: '#34d399', fontWeight: 700 }}>m</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleFoundationOverhangChange &&
+                          handleFoundationOverhangChange((Number(foundationOverhangM) || 0) + 0.05)
+                        }
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '6px',
+                          background: '#1e293b',
+                          color: '#f8fafc',
+                          border: '1px solid #334155',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <span style={{ color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24', fontWeight: 700 }}>
+                    {buildingStage === 'parapet'
+                      ? 'Parapet Level: Drawn base dimensions stay exact (+0m)'
+                      : 'Woodwork Level: Base dimensions stay exact (+0m)'}
+                  </span>
+                )}
+              </div>
+
               {/* Full-Height Interactive 2D Canvas */}
               <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 <Roof2DDiagram
@@ -1183,61 +1277,95 @@ export default function MobileWorkspace({
 
                     <div
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: '8px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '6px',
                         borderTop: '1px solid #1e293b',
                         paddingTop: '6px',
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', fontSize: '11px', color: '#94a3b8' }}>
-                        <span>
-                          Height: <strong style={{ color: '#38bdf8' }}>{formatLength(geometry?.roofHeight || 0, unitSystem)}</strong> ({geometry?.pitchDegrees ?? 0}°)
-                        </span>
-                        <span>
-                          Area: <strong style={{ color: '#e2e8f0' }}>{formatArea(geometry?.totalArea || 0, unitSystem)}</strong> • Rafter: <strong style={{ color: '#e2e8f0' }}>{formatLength(geometry?.rafterLength || 0, unitSystem)}</strong>
-                        </span>
+                      {/* Kingpost Height Control */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
+                        <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>KP</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakKingpost(Math.max(0.2, (geometry?.roofHeight || 1) - 0.1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Lower kingpost height"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min="0.2"
+                            max="8.5"
+                            step="0.1"
+                            aria-label="Kingpost height (m)"
+                            value={Number((geometry?.roofHeight || 0).toFixed(2))}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (Number.isFinite(v) && v >= 0.2) handleTweakKingpost(v);
+                            }}
+                            style={{ width: '44px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>m</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakKingpost((geometry?.roofHeight || 1) + 0.1)}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Raise kingpost height"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleTweakKingpost(Math.max(0.4, (geometry?.roofHeight || 1) - 0.25))}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            background: '#1e293b',
-                            color: '#f8fafc',
-                            border: '1px solid #334155',
-                            fontSize: '16px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                          }}
-                          title="Lower roof height"
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTweakKingpost((geometry?.roofHeight || 1) + 0.25)}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            background: '#1e293b',
-                            color: '#f8fafc',
-                            border: '1px solid #334155',
-                            fontSize: '16px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                          }}
-                          title="Raise roof height"
-                        >
-                          +
-                        </button>
+                      {/* Angle of Inclination Control */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
+                        <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>Angle</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Decrease pitch angle"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min="5"
+                            max="68"
+                            step="1"
+                            aria-label="Pitch angle (degrees)"
+                            value={Number(geometry?.pitchDegrees ?? 0)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                            }}
+                            style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#fbbf24' }}>°</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.min(68, (geometry?.pitchDegrees || 30) + 1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Increase pitch angle"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '10.5px', color: '#94a3b8' }}>
+                      <span>
+                        Area: <strong style={{ color: '#e2e8f0' }}>{formatArea(geometry?.totalArea || 0, unitSystem)}</strong>
+                      </span>
+                      <span>
+                        Rafter: <strong style={{ color: '#e2e8f0' }}>{formatLength(geometry?.rafterLength || 0, unitSystem)}</strong>
+                      </span>
                     </div>
                   </div>
                 </>
@@ -1307,68 +1435,102 @@ export default function MobileWorkspace({
                       gap: '6px',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                      <select
-                        value={roofType}
-                        onChange={(e) => setRoofType(e.target.value)}
-                        aria-label="Roof Framing Type"
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          background: '#090e1a',
-                          color: '#e2e8f0',
-                          border: '1px solid #334155',
-                          borderRadius: '7px',
-                          padding: '6px 8px',
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {ROOF_TYPES.map((rt) => (
-                          <option key={rt.id} value={rt.id}>
-                            {rt.name}
-                          </option>
-                        ))}
-                      </select>
+                    <select
+                      value={roofType}
+                      onChange={(e) => setRoofType(e.target.value)}
+                      aria-label="Roof Framing Type"
+                      style={{
+                        width: '100%',
+                        minWidth: 0,
+                        background: '#090e1a',
+                        color: '#e2e8f0',
+                        border: '1px solid #334155',
+                        borderRadius: '7px',
+                        padding: '6px 8px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {ROOF_TYPES.map((rt) => (
+                        <option key={rt.id} value={rt.id}>
+                          {rt.name}
+                        </option>
+                      ))}
+                    </select>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Height:</span>
-                        <button
-                          type="button"
-                          onClick={() => handleTweakKingpost(Math.max(0.4, (geometry?.roofHeight || 1) - 0.25))}
-                          style={{
-                            width: '30px',
-                            height: '30px',
-                            borderRadius: '7px',
-                            background: '#1e293b',
-                            color: '#f8fafc',
-                            border: '1px solid #334155',
-                            fontSize: '15px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                          }}
-                          title="Lower kingpost / truss height"
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleTweakKingpost((geometry?.roofHeight || 1) + 0.25)}
-                          style={{
-                            width: '30px',
-                            height: '30px',
-                            borderRadius: '7px',
-                            background: '#1e293b',
-                            color: '#f8fafc',
-                            border: '1px solid #334155',
-                            fontSize: '15px',
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                          }}
-                          title="Raise kingpost / truss height"
-                        >
-                          +
-                        </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                      {/* Kingpost Control */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
+                        <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>KP</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakKingpost(Math.max(0.2, (geometry?.roofHeight || 1) - 0.1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Lower kingpost height"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min="0.2"
+                            max="8.5"
+                            step="0.1"
+                            aria-label="Woodwork kingpost height (m)"
+                            value={Number((geometry?.roofHeight || 0).toFixed(2))}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (Number.isFinite(v) && v >= 0.2) handleTweakKingpost(v);
+                            }}
+                            style={{ width: '44px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>m</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakKingpost((geometry?.roofHeight || 1) + 0.1)}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Raise kingpost height"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Pitch Angle Control */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
+                        <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>Angle</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Decrease angle of inclination"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            min="5"
+                            max="68"
+                            step="1"
+                            aria-label="Woodwork angle of inclination (degrees)"
+                            value={Number(geometry?.pitchDegrees ?? 0)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                            }}
+                            style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                          />
+                          <span style={{ fontSize: '10px', color: '#38bdf8' }}>°</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.min(68, (geometry?.pitchDegrees || 30) + 1))}
+                            style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
+                            title="Increase angle of inclination"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1379,7 +1541,7 @@ export default function MobileWorkspace({
                         alignItems: 'center',
                         borderTop: '1px solid #1e293b',
                         paddingTop: '5px',
-                        fontSize: '11px',
+                        fontSize: '10.5px',
                         color: '#94a3b8',
                       }}
                     >
