@@ -1,0 +1,8 @@
+# Legacy Python/Streamlit files (prevents Vercel from running uv/pip install)
+requirements.txt
+roof_app.py
+
+# Local dev / scratch artifacts not needed in Vercel deployment
+eng.traineddata
+WhatsApp Video 2026-10-25 at 17.41.50.mp4
+.devcontainer/
