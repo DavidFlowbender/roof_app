@@ -160,32 +160,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-    let cancelled = false;
-    (async () => {
-      const { session, error } = await consumeOAuthCallbackFromUrl();
-      if (cancelled) return;
-      if (error) {
-        setProAuthError(error);
-        setProModalOpen(true);
-        return;
-      }
-      if (session?.access_token) {
-        setProAuthError('');
-        setProSession(session);
-        return;
-      }
-      const syncedSession = await syncDevAuthSession(getStoredAuthSession());
-      if (!cancelled && syncedSession?.access_token) {
-        setProSession(syncedSession);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!isSupabaseConfigured() || !proSession?.access_token) return;
     let cancelled = false;
     (async () => {
@@ -306,8 +280,13 @@ export default function App() {
     return ov && typeof ov === 'object' ? ov : { front: 0.45, back: 0.45, left: 0.45, right: 0.45 };
   });
   const [isUniformOverhang, setIsUniformOverhang] = useState(true);
+  const [hasActiveDesign, setHasActiveDesign] = useState(() =>
+    Boolean(readStoredActiveDesign()?.hasActiveDesign)
+  );
   const [polygonVertices, setPolygonVertices] = useState(() => {
-    const pts = readStoredActiveDesign()?.polygonVertices;
+    const saved = readStoredActiveDesign();
+    if (!saved?.hasActiveDesign) return null;
+    const pts = saved?.polygonVertices;
     return Array.isArray(pts) && pts.length >= 3 ? pts : null;
   });
   const [sketchUnderlayImage, setSketchUnderlayImage] = useState(null);
@@ -323,6 +302,62 @@ export default function App() {
 
   // Extensions list
   const [extensions, setExtensions] = useState([]);
+
+  const resetToBlankCanvas = () => {
+    setHasActiveDesign(false);
+    setPolygonVertices(null);
+    setSketchUnderlayImage(null);
+    setKingpostOverrideM(null);
+    setSlantingHeightInput('');
+    setExtensions([]);
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.removeItem('roofcalc_inprogress_sketch_v1');
+        window.sessionStorage.removeItem(ACTIVE_DESIGN_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    let cancelled = false;
+    (async () => {
+      const { session, error } = await consumeOAuthCallbackFromUrl();
+      if (cancelled) return;
+      if (error) {
+        setProAuthError(error);
+        setProModalOpen(true);
+        return;
+      }
+      if (session?.access_token) {
+        setProAuthError('');
+        resetToBlankCanvas();
+        setProSession(session);
+        return;
+      }
+      const syncedSession = await syncDevAuthSession(getStoredAuthSession());
+      if (!cancelled && syncedSession?.access_token) {
+        setProSession(syncedSession);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSetPolygonVertices = (pts) => {
+    setPolygonVertices(pts);
+    if (Array.isArray(pts) && pts.length >= 3) {
+      setHasActiveDesign(true);
+    }
+  };
+
+  const handleActivateRectangle = () => {
+    setPolygonVertices(null);
+    setHasActiveDesign(true);
+  };
 
   // Materials & Pricing State
   const [selectedMaterial, setSelectedMaterial] = useState('stone_coated');
@@ -381,9 +416,14 @@ export default function App() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
+      if (!hasActiveDesign) {
+        window.sessionStorage.removeItem(ACTIVE_DESIGN_STORAGE_KEY);
+        return;
+      }
       window.sessionStorage.setItem(
         ACTIVE_DESIGN_STORAGE_KEY,
         JSON.stringify({
+          hasActiveDesign: true,
           roofType,
           length,
           breadth,
@@ -398,6 +438,7 @@ export default function App() {
       // Ignore storage quota errors
     }
   }, [
+    hasActiveDesign,
     roofType,
     length,
     breadth,
@@ -583,6 +624,7 @@ export default function App() {
 
   // Apply converted Paper Sketch -> 2D & Calculations into main workspace
   const handleApplyConvertedSketch = (payload, options = {}) => {
+    setHasActiveDesign(true);
     const nextStage = payload.stageId || buildingStage;
     setBuildingStage(nextStage);
     setRoofType(payload.roofType || 'hip');
@@ -718,6 +760,7 @@ export default function App() {
 
   // Preset House Dimensions
   const applyPreset = (type, l, b, h) => {
+    setHasActiveDesign(true);
     setRoofType(type);
     setLength(l);
     setBreadth(b);
@@ -738,11 +781,13 @@ export default function App() {
 
   const handleLengthChange = (val) => {
     const num = Number(val) || 0;
+    setHasActiveDesign(true);
     setLength(unitSystem === UNIT_SYSTEMS.IMPERIAL ? feetToMeters(num) : num);
   };
 
   const handleBreadthChange = (val) => {
     const num = Number(val) || 0;
+    setHasActiveDesign(true);
     setBreadth(unitSystem === UNIT_SYSTEMS.IMPERIAL ? feetToMeters(num) : num);
   };
 
@@ -2270,7 +2315,10 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
           isUniformOverhang={isUniformOverhang}
           setIsUniformOverhang={setIsUniformOverhang}
           polygonVertices={polygonVertices}
-          setPolygonVertices={setPolygonVertices}
+          setPolygonVertices={handleSetPolygonVertices}
+          hasActiveDesign={hasActiveDesign}
+          onResetToBlank={resetToBlankCanvas}
+          onActivateRectangle={handleActivateRectangle}
           extensions={extensions}
           handleAddExtension={handleAddExtension}
           handleRemoveExtension={handleRemoveExtension}
@@ -3154,6 +3202,7 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
         initialError={proAuthError}
         onAuthSuccess={async (session) => {
           setProAuthError('');
+          resetToBlankCanvas();
           setProSession(session);
           await syncProAccount(session);
         }}

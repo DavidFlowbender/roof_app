@@ -25,7 +25,7 @@ import {
 import { MATERIAL_PROFILES, estimateMaterials, formatCurrency } from '../utils/materials';
 import { estimateWaterCollector } from '../utils/waterCollector';
 import { UNIT_SYSTEMS, formatLength, formatArea } from '../utils/units';
-import { ROOF_TYPES } from '../utils/roofMath';
+import { ROOF_TYPES, SHAPE_PRESETS } from '../utils/roofMath';
 import { BUILDING_STAGES } from '../utils/stagePresets';
 import { getUserInitials, getUserDisplayName } from '../utils/proSession';
 import Roof2DDiagram from './Roof2DDiagram';
@@ -45,6 +45,9 @@ export default function MobileWorkspace({
   handleBreadthChange,
   polygonVertices,
   setPolygonVertices,
+  hasActiveDesign = true,
+  onResetToBlank = null,
+  onActivateRectangle = null,
   handleTweakKingpost,
   selectedMaterial,
   setSelectedMaterial,
@@ -1053,6 +1056,9 @@ export default function MobileWorkspace({
                   roofType={roofType}
                   unitSystem={unitSystem}
                   polygonVertices={polygonVertices}
+                  hasActiveDesign={hasActiveDesign}
+                  onResetToBlank={onResetToBlank}
+                  onActivateRectangle={onActivateRectangle}
                   onPolygonChange={(pts) => setPolygonVertices(pts)}
                   onDimensionsChange={({ length: l, breadth: b }) => {
                     handleLengthChange(l);
@@ -1078,16 +1084,41 @@ export default function MobileWorkspace({
               {roofSubPage === 'view' && (
                 <>
                   <div style={{ flex: 1, minHeight: 0, borderRadius: '12px', overflow: 'hidden', border: '1px solid #1f2937' }}>
-                    <Roof3DViewer
-                      geometry={geometry}
-                      roofType={roofType}
-                      buildingStage={buildingStage}
-                      parapetConfig={parapetConfig}
-                      woodworkConfig={woodworkConfig}
-                      selectedMaterial={selectedMaterial}
-                      polygonVertices={polygonVertices}
-                      forcedDisplayMode="finished"
-                    />
+                    {hasActiveDesign ? (
+                      <Roof3DViewer
+                        geometry={geometry}
+                        roofType={roofType}
+                        buildingStage={buildingStage}
+                        parapetConfig={parapetConfig}
+                        woodworkConfig={woodworkConfig}
+                        selectedMaterial={selectedMaterial}
+                        polygonVertices={polygonVertices}
+                        forcedDisplayMode="finished"
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px', gap: '10px', background: '#090e1a' }}>
+                        <Box className="w-8 h-8 text-sky-400" />
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#f8fafc' }}>No Roof Plan Drawn Yet</div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', lineHeight: 1.45 }}>
+                          Draw your walls on 2D Plan, snap a paper sketch, or try an example to preview in 3D.
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
+                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                            Draw 2D Plan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lPreset = SHAPE_PRESETS.find((p) => p.id === 'l_shape') || SHAPE_PRESETS[0];
+                              if (lPreset) setPolygonVertices(lPreset.vertices);
+                            }}
+                            style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Load Example
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Roof Type, Material & Height Controls */}
@@ -1226,16 +1257,41 @@ export default function MobileWorkspace({
               {woodSubPage === 'view' && (
                 <>
                   <div style={{ flex: 1, minHeight: 0, borderRadius: '12px', overflow: 'hidden', border: '1px solid #1f2937' }}>
-                    <Roof3DViewer
-                      geometry={geometry}
-                      roofType={roofType}
-                      buildingStage={buildingStage}
-                      parapetConfig={parapetConfig}
-                      woodworkConfig={woodworkConfig}
-                      selectedMaterial={selectedMaterial}
-                      polygonVertices={polygonVertices}
-                      forcedDisplayMode="framing"
-                    />
+                    {hasActiveDesign ? (
+                      <Roof3DViewer
+                        geometry={geometry}
+                        roofType={roofType}
+                        buildingStage={buildingStage}
+                        parapetConfig={parapetConfig}
+                        woodworkConfig={woodworkConfig}
+                        selectedMaterial={selectedMaterial}
+                        polygonVertices={polygonVertices}
+                        forcedDisplayMode="framing"
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px', gap: '10px', background: '#090e1a' }}>
+                        <Hammer className="w-8 h-8 text-amber-400" />
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#f8fafc' }}>No Roof Plan Drawn Yet</div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', lineHeight: 1.45 }}>
+                          Draw your walls on 2D Plan, snap a paper sketch, or load an example to view 3D timber framing.
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
+                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                            Draw 2D Plan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lPreset = SHAPE_PRESETS.find((p) => p.id === 'l_shape') || SHAPE_PRESETS[0];
+                              if (lPreset) setPolygonVertices(lPreset.vertices);
+                            }}
+                            style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Load Example
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Timber Framing Roof Style & Pitch Height Controls */}
@@ -1360,17 +1416,42 @@ export default function MobileWorkspace({
                       border: '1px solid #1f2937',
                     }}
                   >
-                    <Roof3DViewer
-                      geometry={geometry}
-                      roofType={roofType}
-                      buildingStage={buildingStage}
-                      parapetConfig={mobileParapetConfig}
-                      woodworkConfig={woodworkConfig}
-                      selectedMaterial={selectedMaterial}
-                      polygonVertices={polygonVertices}
-                      wcConfig={{ ...(wcConfig || {}), enabled: true }}
-                      forcedDisplayMode="finished"
-                    />
+                    {hasActiveDesign ? (
+                      <Roof3DViewer
+                        geometry={geometry}
+                        roofType={roofType}
+                        buildingStage={buildingStage}
+                        parapetConfig={mobileParapetConfig}
+                        woodworkConfig={woodworkConfig}
+                        selectedMaterial={selectedMaterial}
+                        polygonVertices={polygonVertices}
+                        wcConfig={{ ...(wcConfig || {}), enabled: true }}
+                        forcedDisplayMode="finished"
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '20px', gap: '10px', background: '#090e1a' }}>
+                        <Droplets className="w-8 h-8 text-sky-400" />
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#f8fafc' }}>No Roof Plan Drawn Yet</div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', lineHeight: 1.45 }}>
+                          Draw your walls on 2D Plan, snap a paper sketch, or load an example to preview 3D Water Collector pipes.
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
+                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                            Draw 2D Plan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const lPreset = SHAPE_PRESETS.find((p) => p.id === 'l_shape') || SHAPE_PRESETS[0];
+                              if (lPreset) setPolygonVertices(lPreset.vertices);
+                            }}
+                            style={{ background: '#1e293b', color: '#cbd5e1', border: '1px solid #334155', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Load Example
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Compact Floors & Drop Points Controls */}

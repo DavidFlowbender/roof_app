@@ -23,7 +23,7 @@ import {
   User,
   Video,
 } from 'lucide-react';
-import { ROOF_TYPES } from '../utils/roofMath';
+import { ROOF_TYPES, SHAPE_PRESETS } from '../utils/roofMath';
 import { UNIT_SYSTEMS, formatLength, formatArea } from '../utils/units';
 import { CURRENCIES, MATERIAL_PROFILES, formatCurrency } from '../utils/materials';
 import { BUILDING_STAGES } from '../utils/stagePresets';
@@ -31,6 +31,8 @@ import { getUserInitials, getUserDisplayName } from '../utils/proSession';
 import Roof3DViewer from './Roof3DViewer';
 import Roof2DDiagram from './Roof2DDiagram';
 import MobileWorkspace from './MobileWorkspace';
+
+const DEVELOPER_EMAILS = ['davidakinbode19@gmail.com', 'sijiteksub@gmail.com'];
 
 export default function RevitWorkspace({
   geometry,
@@ -57,6 +59,9 @@ export default function RevitWorkspace({
   setIsUniformOverhang,
   polygonVertices,
   setPolygonVertices,
+  hasActiveDesign = true,
+  onResetToBlank = null,
+  onActivateRectangle = null,
   extensions,
   handleAddExtension,
   handleRemoveExtension,
@@ -120,6 +125,10 @@ export default function RevitWorkspace({
   }, [profileMenuOpen]);
 
   const isCustomShape = Boolean(polygonVertices && polygonVertices.length >= 3);
+  const isDeveloper = Boolean(
+    (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
+      DEVELOPER_EMAILS.includes(String(proUser?.email || '').trim().toLowerCase())
+  );
 
   if (isMobileAppMode) {
     return (
@@ -137,6 +146,9 @@ export default function RevitWorkspace({
         handleBreadthChange={handleBreadthChange}
         polygonVertices={polygonVertices}
         setPolygonVertices={setPolygonVertices}
+        hasActiveDesign={hasActiveDesign}
+        onResetToBlank={onResetToBlank}
+        onActivateRectangle={onActivateRectangle}
         handleTweakKingpost={handleTweakKingpost}
         selectedMaterial={selectedMaterial}
         setSelectedMaterial={setSelectedMaterial}
@@ -241,7 +253,7 @@ export default function RevitWorkspace({
             <Calculator className="w-4 h-4" />
             <span>2. BOQ &amp; Cost</span>
             <span className="studio-cost-pill">
-              {formatCurrency(materials.summary.grandTotal, currencyCode)}
+              {hasActiveDesign ? formatCurrency(materials.summary.grandTotal, currencyCode) : '—'}
             </span>
           </button>
 
@@ -260,7 +272,11 @@ export default function RevitWorkspace({
                 color: isPremium ? '#38bdf8' : '#fbbf24',
               }}
             >
-              {isPremium ? formatCurrency(wcMaterials?.summary?.grandTotal || 0, currencyCode) : 'PRO'}
+              {isPremium
+                ? hasActiveDesign
+                  ? formatCurrency(wcMaterials?.summary?.grandTotal || 0, currencyCode)
+                  : '—'
+                : 'PRO'}
             </span>
           </button>
         </nav>
@@ -323,15 +339,17 @@ export default function RevitWorkspace({
             <span>Guide</span>
           </button>
 
-          <button
-            type="button"
-            className="studio-ghost-btn"
-            onClick={() => setIsMobileAppMode(true)}
-            title="Preview simple Mobile App version"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Mobile</span>
-          </button>
+          {isDeveloper && (
+            <button
+              type="button"
+              className="studio-ghost-btn"
+              onClick={() => setIsMobileAppMode(true)}
+              title="Developer preview: Mobile App version"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Mobile</span>
+            </button>
+          )}
 
           {onSwitchLayout && (
             <button
@@ -928,6 +946,9 @@ export default function RevitWorkspace({
                   roofType={roofType}
                   unitSystem={unitSystem}
                   polygonVertices={polygonVertices}
+                  hasActiveDesign={hasActiveDesign}
+                  onResetToBlank={onResetToBlank}
+                  onActivateRectangle={onActivateRectangle}
                   onPolygonChange={(pts) => setPolygonVertices(pts)}
                   onDimensionsChange={({ length: l, breadth: b }) => {
                     handleLengthChange(l);
@@ -950,15 +971,100 @@ export default function RevitWorkspace({
 
             {(viewLayout === 'split' || viewLayout === '3d') && (
               <div className="studio-canvas-pane">
-                <Roof3DViewer
-                  geometry={geometry}
-                  roofType={roofType}
-                  extensions={extensions}
-                  buildingStage={buildingStage}
-                  parapetConfig={parapetConfig}
-                  woodworkConfig={woodworkConfig}
-                  selectedMaterial={selectedMaterial}
-                />
+                {hasActiveDesign ? (
+                  <Roof3DViewer
+                    geometry={geometry}
+                    roofType={roofType}
+                    extensions={extensions}
+                    buildingStage={buildingStage}
+                    parapetConfig={parapetConfig}
+                    woodworkConfig={woodworkConfig}
+                    selectedMaterial={selectedMaterial}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      minHeight: '380px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      padding: '28px',
+                      gap: '12px',
+                      background:
+                        'radial-gradient(circle at 50% 42%, rgba(14, 165, 233, 0.08), rgba(9, 14, 26, 0.96) 65%)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '52px',
+                        height: '52px',
+                        borderRadius: '14px',
+                        background: 'rgba(14, 165, 233, 0.14)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#38bdf8',
+                      }}
+                    >
+                      <Box className="w-6 h-6" />
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc' }}>
+                      3D Roof Preview Ready
+                    </div>
+                    <p style={{ margin: 0, maxWidth: '340px', fontSize: '12.5px', color: '#94a3b8', lineHeight: 1.55 }}>
+                      Click on the 2D Floor Plan to sketch your building walls, snap a paper sketch, or open an example to generate your live 3D roof &amp; BOQ.
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', marginTop: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setSketchModalOpen(true)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          color: '#0f172a',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 13px',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Snap / Upload Sketch</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const lPreset = SHAPE_PRESETS.find((p) => p.id === 'l_shape') || SHAPE_PRESETS[0];
+                          if (lPreset) setPolygonVertices(lPreset.vertices);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: '#1e293b',
+                          color: '#cbd5e1',
+                          border: '1px solid #334155',
+                          borderRadius: '8px',
+                          padding: '8px 13px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>Load Example (L-Shape)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1896,14 +2002,14 @@ export default function RevitWorkspace({
           <div className="studio-footer-stats">
             <span className="studio-stat">
               <Layers className="w-3.5 h-3.5 text-sky-400" />
-              Roof Area: <strong>{formatArea(geometry.totalArea, unitSystem)}</strong>
+              Roof Area: <strong>{hasActiveDesign ? formatArea(geometry.totalArea, unitSystem) : '—'}</strong>
             </span>
             <span className="studio-stat">
               <Box className="w-3.5 h-3.5 text-amber-400" />
-              Ridges &amp; Hips: <strong>{formatLength(geometry.totalRidge, unitSystem)}</strong>
+              Ridges &amp; Hips: <strong>{hasActiveDesign ? formatLength(geometry.totalRidge, unitSystem) : '—'}</strong>
             </span>
             <span className="studio-stat">
-              Footprint: <strong>{formatArea(geometry.baseArea, unitSystem)}</strong>
+              Footprint: <strong>{hasActiveDesign ? formatArea(geometry.baseArea, unitSystem) : '—'}</strong>
             </span>
           </div>
 
@@ -1913,7 +2019,9 @@ export default function RevitWorkspace({
             onClick={() => setMainTab('boq')}
           >
             <span>
-              Total: {formatCurrency(materials.summary.grandTotal, currencyCode)} &mdash; View BOQ
+              {hasActiveDesign
+                ? `Total: ${formatCurrency(materials.summary.grandTotal, currencyCode)} — View BOQ`
+                : 'Draw or Load an Example to View BOQ'}
             </span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>

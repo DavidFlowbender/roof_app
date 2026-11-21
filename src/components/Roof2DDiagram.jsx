@@ -18,6 +18,8 @@ import {
   EyeOff,
   Pause,
   Play,
+  ChevronDown,
+  LayoutTemplate,
 } from 'lucide-react';
 import { formatLength, UNIT_SYSTEMS, metersToFeet, feetToMeters } from '../utils/units';
 import { normalizeOverhang, SHAPE_PRESETS, calculatePolygonMetrics, offsetPolygonVertices } from '../utils/roofMath';
@@ -51,6 +53,9 @@ export default function Roof2DDiagram({
   onDimensionsChange,
   onPolygonChange,
   polygonVertices = null,
+  hasActiveDesign = true,
+  onResetToBlank = null,
+  onActivateRectangle = null,
   isSplitView = false,
   buildingStage = 'foundation',
   onStageChange = null,
@@ -67,6 +72,23 @@ export default function Roof2DDiagram({
   const pointerDownPxRef = useRef(null);
   const mousePanRef = useRef(null);
   const suppressNextClickRef = useRef(false);
+  const examplesMenuRef = useRef(null);
+  const [examplesOpen, setExamplesOpen] = useState(false);
+
+  useEffect(() => {
+    if (!examplesOpen) return;
+    const onOutside = (e) => {
+      if (examplesMenuRef.current && !examplesMenuRef.current.contains(e.target)) {
+        setExamplesOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onOutside);
+    window.addEventListener('touchstart', onOutside);
+    return () => {
+      window.removeEventListener('mousedown', onOutside);
+      window.removeEventListener('touchstart', onOutside);
+    };
+  }, [examplesOpen]);
 
   // Fallback rectangular dimensions
   const L = geometry?.buildingDimensions?.length || 12;
@@ -700,10 +722,12 @@ export default function Roof2DDiagram({
     setIsSketchSelected(false);
     setSelectionBox(null);
     setMode('line_sketch');
+    setExamplesOpen(false);
     emitPolygonChange(null);
+    if (onResetToBlank) onResetToBlank();
   };
 
-  // Apply a Polygon Preset (like the Cross shape from the video!)
+  // Apply a Polygon Preset (Example)
   const handleApplyPreset = (preset) => {
     pushHistory(makeSnap());
     setIsSketchSelected(false);
@@ -712,19 +736,152 @@ export default function Roof2DDiagram({
     setIsDrawing(false);
     setIsSketchPaused(false);
     setSnapInfo(null);
+    setExamplesOpen(false);
     setMode('manipulate');
     emitPolygonChange(preset.vertices);
   };
 
-  // Switch back to standard rectangular roof
+  // Switch to standard rectangular roof example
   const handleSwitchToRectangle = () => {
     if (sketchPts.length > 0) pushHistory(makeSnap());
     setSketchPts([]);
     setIsDrawing(false);
     setIsSketchPaused(false);
+    setExamplesOpen(false);
     setMode('manipulate');
     emitPolygonChange(null);
+    if (onActivateRectangle) onActivateRectangle();
   };
+
+  const renderExamplesDropdown = (compact = false) => (
+    <div ref={examplesMenuRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={() => setExamplesOpen((v) => !v)}
+        className="sketch-preset-pill"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: compact ? '5px 8px' : '4px 10px',
+          fontSize: compact ? '11px' : '11.5px',
+          fontWeight: 700,
+          background: examplesOpen ? 'rgba(56, 189, 248, 0.18)' : 'rgba(30, 41, 59, 0.85)',
+          borderColor: examplesOpen ? '#38bdf8' : '#334155',
+          color: '#e2e8f0',
+          cursor: 'pointer',
+        }}
+        title="Load an example floor plan"
+      >
+        <LayoutTemplate className="w-3.5 h-3.5 text-sky-400" />
+        <span>Examples</span>
+        <ChevronDown className="w-3 h-3 text-slate-400" />
+      </button>
+
+      {examplesOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            minWidth: '196px',
+            zIndex: 80,
+            background: '#0f172a',
+            border: '1px solid #334155',
+            borderRadius: '10px',
+            padding: '6px',
+            boxShadow: '0 14px 32px rgba(2, 6, 23, 0.78)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+          }}
+        >
+          <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', padding: '3px 8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Sample Roof Plans
+          </div>
+          <button
+            type="button"
+            onClick={handleSwitchToRectangle}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              padding: '7px 9px',
+              borderRadius: '7px',
+              border: 'none',
+              background: 'transparent',
+              color: '#e2e8f0',
+              fontSize: '12px',
+              fontWeight: 600,
+              textAlign: 'left',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#1e293b'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <span>Standard Rectangle</span>
+            <span style={{ fontSize: '10.5px', color: '#94a3b8' }}>12×8m</span>
+          </button>
+          {SHAPE_PRESETS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handleApplyPreset(p)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                padding: '7px 9px',
+                borderRadius: '7px',
+                border: 'none',
+                background: 'transparent',
+                color: '#e2e8f0',
+                fontSize: '12px',
+                fontWeight: 600,
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#1e293b'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span>{p.name}</span>
+              <span style={{ fontSize: '10px', color: '#38bdf8' }}>Example</span>
+            </button>
+          ))}
+          {(hasActiveDesign || sketchPts.length > 0) && (
+            <div style={{ borderTop: '1px solid #1e293b', marginTop: '3px', paddingTop: '3px' }}>
+              <button
+                type="button"
+                onClick={handleClearSketch}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  width: '100%',
+                  padding: '7px 9px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#fca5a5',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.14)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear to Blank Canvas</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // Computed display points for polygon
   const isClosed = !isDrawing && sketchPts.length >= 3;
@@ -844,6 +1001,7 @@ export default function Roof2DDiagram({
               <Move className="w-3 h-3" />
               <span>Edit</span>
             </button>
+            {renderExamplesDropdown(true)}
             {mode === 'line_sketch' && isDrawing && sketchPts.length > 0 && (
               <button
                 type="button"
@@ -900,13 +1058,13 @@ export default function Roof2DDiagram({
               <Redo2 className="w-3.5 h-3.5" />
               <span>Redo</span>
             </button>
-            {sketchPts.length > 0 && (
+            {(sketchPts.length > 0 || hasActiveDesign) && (
               <button
                 type="button"
                 onClick={handleClearSketch}
                 className="sketch-btn-trash"
                 style={{ padding: '5px 7px' }}
-                title="Clear Sketch"
+                title="Clear to Blank Canvas"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -1027,28 +1185,10 @@ export default function Roof2DDiagram({
         </div>
       </div>
 
-      {/* 2. Shape Presets & Underlay Bar */}
+      {/* 2. Examples & Level Bar */}
       <div className="sketch-presets-bar">
         <div className="sketch-presets-list">
-          <span style={{ color: 'var(--text-muted)' }}>Shapes:</span>
-          {SHAPE_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => handleApplyPreset(p)}
-              className="sketch-preset-pill"
-            >
-              {p.name}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={handleSwitchToRectangle}
-            className="sketch-preset-pill"
-            style={{ opacity: 0.75 }}
-          >
-            Rectangle
-          </button>
+          {renderExamplesDropdown(false)}
 
           {!readOnlyMobile && !mobileInteractive && !compactPreview && onStageChange && (
             <div
@@ -1205,12 +1345,12 @@ export default function Roof2DDiagram({
             </button>
           )}
 
-          {sketchPts.length > 0 && (
+          {(sketchPts.length > 0 || hasActiveDesign) && (
             <button
               type="button"
               onClick={handleClearSketch}
               className="sketch-btn-trash"
-              title="Clear Sketch"
+              title="Clear to Blank Canvas"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -1610,8 +1750,58 @@ export default function Roof2DDiagram({
             />
           )}
 
-          {/* A. If Standard Rectangle (no custom polygon) */}
-          {!isClosed && sketchPts.length === 0 && (() => {
+          {/* Blank Canvas Ready Hint (non-blocking — clicking anywhere starts sketching immediately) */}
+          {!hasActiveDesign && !isDrawing && sketchPts.length === 0 && !compactPreview && !readOnlyMobile && (
+            <g pointerEvents="none">
+              <rect
+                x={svgWidth / 2 - (isCompactViewport ? 168 : 210)}
+                y={svgHeight / 2 - (isCompactViewport ? 44 : 42)}
+                width={isCompactViewport ? 336 : 420}
+                height={isCompactViewport ? 88 : 84}
+                rx="12"
+                fill="rgba(15, 23, 42, 0.88)"
+                stroke="rgba(56, 189, 248, 0.35)"
+                strokeWidth="1.2"
+                strokeDasharray="5 4"
+              />
+              <text
+                x={svgWidth / 2}
+                y={svgHeight / 2 - 12}
+                fill="#f8fafc"
+                fontSize={isCompactViewport ? '14.5' : '14'}
+                fontWeight="800"
+                textAnchor="middle"
+              >
+                Ready for a New Drawing
+              </text>
+              <text
+                x={svgWidth / 2}
+                y={svgHeight / 2 + 10}
+                fill="#94a3b8"
+                fontSize={isCompactViewport ? '11.5' : '11.5'}
+                textAnchor="middle"
+              >
+                {isCompactViewport
+                  ? 'Tap anywhere on the grid to draw walls,'
+                  : 'Click anywhere on the grid to sketch your walls,'}
+              </text>
+              <text
+                x={svgWidth / 2}
+                y={svgHeight / 2 + 27}
+                fill="#38bdf8"
+                fontSize={isCompactViewport ? '11.5' : '11.5'}
+                fontWeight="600"
+                textAnchor="middle"
+              >
+                {isCompactViewport
+                  ? 'tap Snap above, or open Examples ▾'
+                  : 'use Snap / Upload Sketch, or open Examples ▾'}
+              </text>
+            </g>
+          )}
+
+          {/* A. If Standard Rectangle (active rectangular design with no custom polygon) */}
+          {hasActiveDesign && !isClosed && sketchPts.length === 0 && (() => {
             const wallLeft = centerX + panOffset.x - (L * scale) / 2;
             const wallTop = centerY + panOffset.y - (B * scale) / 2;
             const wallW = L * scale;
