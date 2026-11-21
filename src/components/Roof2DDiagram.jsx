@@ -71,6 +71,7 @@ export default function Roof2DDiagram({
   const svgRef = useRef(null);
   const pointerDownPxRef = useRef(null);
   const mousePanRef = useRef(null);
+  const touchDrawRef = useRef(null);
   const suppressNextClickRef = useRef(false);
   const examplesMenuRef = useRef(null);
   const [examplesOpen, setExamplesOpen] = useState(false);
@@ -282,6 +283,14 @@ export default function Roof2DDiagram({
   const handleTouchStartZoomPan = (e) => {
     if (e.touches.length === 2) {
       // Two-finger pinch-to-zoom + pan (prevents accidental drawing/vertex drag)
+      if (touchDrawRef.current) {
+        if (touchDrawRef.current.startedFresh && touchDrawRef.current.activePts.length <= 1) {
+          setSketchPts([]);
+          setIsDrawing(false);
+          setSnapInfo(null);
+        }
+        touchDrawRef.current = null;
+      }
       pointerDownPxRef.current = null;
       suppressNextClickRef.current = true;
       setSelectionBox(null);
@@ -412,12 +421,12 @@ export default function Roof2DDiagram({
   };
 
   // Helper to snap a point based on rules
-  const computeSnappedPoint = (rawM, lastPoint, startPoint) => {
+  const computeSnappedPoint = (rawM, lastPoint, startPoint, ptsCount = sketchPts.length, preferredAxis = null) => {
     let snapM = { x: rawM.x, y: rawM.y };
     let info = { isCloseSnap: false, isOrthoSnap: false, axis: null, isAlignedWithStart: false, distM: 0 };
 
     // 1. Check Close Loop Snap (if cursor is near the first point)
-    if (startPoint && sketchPts.length >= 3) {
+    if (startPoint && ptsCount >= 3) {
       const dxStart = rawM.x - startPoint.x;
       const dyStart = rawM.y - startPoint.y;
       const distToStartPx = Math.sqrt(dxStart * dxStart + dyStart * dyStart) * scale;
@@ -434,8 +443,9 @@ export default function Roof2DDiagram({
     if (orthoSnap && lastPoint) {
       const dx = rawM.x - lastPoint.x;
       const dy = rawM.y - lastPoint.y;
+      const useHorizontal = preferredAxis ? preferredAxis === 'horizontal' : Math.abs(dx) >= Math.abs(dy);
 
-      if (Math.abs(dx) >= Math.abs(dy)) {
+      if (useHorizontal) {
         // Horizontal Lock: freeze Y strictly to lastPoint.y
         snapM.y = lastPoint.y;
         snapM.x = rawM.x;
@@ -474,7 +484,7 @@ export default function Roof2DDiagram({
     }
 
     // 4. Smart Alignment with Starting Point (Inference guide snap)
-    if (startPoint && lastPoint && sketchPts.length >= 3) {
+    if (startPoint && lastPoint && ptsCount >= 3) {
       if (info.axis === 'horizontal' && Math.abs(snapM.x - startPoint.x) < 0.4) {
         snapM.x = startPoint.x;
         info.isAlignedWithStart = true;
@@ -493,7 +503,7 @@ export default function Roof2DDiagram({
     return { pt: snapM, info };
   };
 
-  // Mouse Move on Canvas
+  // Mouse / Touch Move on Canvas
   const handleCanvasMouseMove = (e) => {
     const pxCoords = getSvgCoordinates(e);
     if (mousePanRef.current) {
@@ -516,6 +526,92 @@ export default function Roof2DDiagram({
       return;
     }
     const rawM = pxToMeter(pxCoords.x, pxCoords.y);
+
+    // Continuous single-finger touch sketching: automatically drops 90° corners as finger changes direction without lifting!
+    if (
+      e.pointerType === 'touch' &&
+      touchDrawRef.current &&
+      touchDrawRef.current.pointerId === e.pointerId &&
+      mode === 'line_sketch' &&
+      !isSketchPaused &&
+      !touchGestureRef.current
+    ) {
+      const st = touchDrawRef.current;
+      const snapCoord = (v) => (gridSnap ? Math.round(v * 2) / 2 : Math.round(v * 10) / 10);
+      let pts = st.activePts;
+      let lastPt = pts[pts.length - 1];
+      const startPt = pts[0];
+
+      const dxM = rawM.x - lastPt.x;
+      const dyM = rawM.y - lastPt.y;
+      const absDxPx = Math.abs(dxM) * scale;
+      const absDyPx = Math.abs(dyM) * scale;
+      const nearStartForClose =
+        pts.length >= 3 && Math.hypot(rawM.x - startPt.x, rawM.y - startPt.y) * scale < 28;
+
+      if (!st.activeAxis && !nearStartForClose && Math.max(absDxPx, absDyPx) >= 16) {
+        st.activeAxis = absDxPx >= absDyPx ? 'horizontal' : 'vertical';
+        st.lastCleanCoord = st.activeAxis === 'horizontal' ? snapCoord(rawM.x) : snapCoord(rawM.y);
+        suppressNextClickRef.current = true;
+      }
+
+      if (!nearStartForClose && st.activeAxis === 'horizontal') {
+        const alongPx = absDxPx;
+        const perpPx = absDyPx;
+        if (perpPx < 16) {
+          st.lastCleanCoord = snapCoord(rawM.x);
+        }
+        // Detect sharp 90° turn onto vertical axis without lifting finger
+        if (alongPx >= 24 && perpPx >= 26) {
+          let cornerX = st.lastCleanCoord !== null ? st.lastCleanCoord : snapCoord(rawM.x);
+          if (pts.length >= 2 && Math.abs(cornerX - startPt.x) < 0.45) {
+            cornerX = startPt.x;
+          }
+          const cornerPt = { x: cornerX, y: lastPt.y };
+          if (Math.hypot(cornerPt.x - lastPt.x, cornerPt.y - lastPt.y) >= 0.25) {
+            pushHistory(makeSnap(pts, true, 'line_sketch'));
+            pts = [...pts, cornerPt];
+            st.activePts = pts;
+            st.activeAxis = 'vertical';
+            st.lastCleanCoord = snapCoord(rawM.y);
+            st.didCommitTurn = true;
+            suppressNextClickRef.current = true;
+            setSketchPts(pts);
+            lastPt = cornerPt;
+          }
+        }
+      } else if (!nearStartForClose && st.activeAxis === 'vertical') {
+        const alongPx = absDyPx;
+        const perpPx = absDxPx;
+        if (perpPx < 16) {
+          st.lastCleanCoord = snapCoord(rawM.y);
+        }
+        // Detect sharp 90° turn onto horizontal axis without lifting finger
+        if (alongPx >= 24 && perpPx >= 26) {
+          let cornerY = st.lastCleanCoord !== null ? st.lastCleanCoord : snapCoord(rawM.y);
+          if (pts.length >= 2 && Math.abs(cornerY - startPt.y) < 0.45) {
+            cornerY = startPt.y;
+          }
+          const cornerPt = { x: lastPt.x, y: cornerY };
+          if (Math.hypot(cornerPt.x - lastPt.x, cornerPt.y - lastPt.y) >= 0.25) {
+            pushHistory(makeSnap(pts, true, 'line_sketch'));
+            pts = [...pts, cornerPt];
+            st.activePts = pts;
+            st.activeAxis = 'horizontal';
+            st.lastCleanCoord = snapCoord(rawM.x);
+            st.didCommitTurn = true;
+            suppressNextClickRef.current = true;
+            setSketchPts(pts);
+            lastPt = cornerPt;
+          }
+        }
+      }
+
+      const { pt, info } = computeSnappedPoint(rawM, lastPt, startPt, pts.length, st.activeAxis);
+      setCursorPos(pt);
+      setSnapInfo(info);
+      return;
+    }
 
     if (mode === 'line_sketch' && isDrawing && !isSketchPaused) {
       const lastPt = sketchPts[sketchPts.length - 1];
@@ -1390,37 +1486,51 @@ export default function Roof2DDiagram({
         onTouchCancel={handleTouchEndZoomPan}
         onWheel={handleWheelZoom}
         onPointerMove={handleCanvasMouseMove}
+        onPointerCancel={() => {
+          mousePanRef.current = null;
+          touchDrawRef.current = null;
+          pointerDownPxRef.current = null;
+        }}
         onPointerUp={(e) => {
           mousePanRef.current = null;
-          // Support finger press-drag-release sketching on touchscreens
+          // Finish continuous single-finger touch stroke (supports multi-turn one-stroke drawing + tap-to-place)
           if (
             e.pointerType === 'touch' &&
+            touchDrawRef.current &&
+            touchDrawRef.current.pointerId === e.pointerId &&
             !readOnlyMobile &&
             mode === 'line_sketch' &&
-            isDrawing &&
-            !isSketchPaused &&
-            pointerDownPxRef.current &&
-            sketchPts.length > 0
+            !isSketchPaused
           ) {
+            const st = touchDrawRef.current;
+            touchDrawRef.current = null;
             const upPx = getSvgCoordinates(e);
-            const dx = upPx.x - pointerDownPxRef.current.x;
-            const dy = upPx.y - pointerDownPxRef.current.y;
-            if (Math.hypot(dx, dy) > 18) {
-              const rawM = pxToMeter(upPx.x, upPx.y);
-              const lastPt = sketchPts[sketchPts.length - 1];
-              const startPt = sketchPts[0];
-              const { pt, info } = computeSnappedPoint(rawM, lastPt, startPt);
+            const rawM = pxToMeter(upPx.x, upPx.y);
+            const pts = st.activePts;
+            const lastPt = pts[pts.length - 1];
+            const startPt = pts[0];
+            const lastPx = meterToPx(lastPt.x, lastPt.y);
+            const distFromLastPx = Math.hypot(upPx.x - lastPx.x, upPx.y - lastPx.y);
+            const dragFromDownPx = pointerDownPxRef.current
+              ? Math.hypot(upPx.x - pointerDownPxRef.current.x, upPx.y - pointerDownPxRef.current.y)
+              : distFromLastPx;
+
+            if (dragFromDownPx > 14 || st.didCommitTurn) {
               suppressNextClickRef.current = true;
-              if (info.isCloseSnap && sketchPts.length >= 3) {
-                pushHistory(makeSnap());
+              const { pt, info } = computeSnappedPoint(rawM, lastPt, startPt, pts.length, st.activeAxis);
+              if (info.isCloseSnap && pts.length >= 3) {
+                pushHistory(makeSnap(pts, true, 'line_sketch'));
+                setSketchPts(pts);
                 setIsDrawing(false);
                 setIsSketchPaused(false);
                 setSnapInfo(null);
                 setMode('manipulate');
-                emitPolygonChange(sketchPts);
-              } else if (pt.x !== lastPt.x || pt.y !== lastPt.y) {
-                pushHistory(makeSnap());
-                setSketchPts([...sketchPts, pt]);
+                emitPolygonChange(pts);
+              } else if (distFromLastPx > 14 && (pt.x !== lastPt.x || pt.y !== lastPt.y)) {
+                pushHistory(makeSnap(pts, true, 'line_sketch'));
+                const finalPts = [...pts, pt];
+                setSketchPts(finalPts);
+                setCursorPos(pt);
               }
             }
           }
@@ -1712,6 +1822,38 @@ export default function Roof2DDiagram({
               pointerDownPxRef.current = px;
               if (isDrawing && isSketchPaused && e.pointerType !== 'touch' && e.button === 0) {
                 mousePanRef.current = { startPx: px, startPan: { ...panOffset }, moved: false };
+                return;
+              }
+              // Single-finger continuous touch sketching: start immediately on touch-down so user can draw walls & turn corners in one continuous stroke
+              if (e.pointerType === 'touch' && !isSketchPaused && !touchGestureRef.current) {
+                const rawM = pxToMeter(px.x, px.y);
+                const snapCoord = (v) => (gridSnap ? Math.round(v * 2) / 2 : Math.round(v * 10) / 10);
+                if (!isDrawing || sketchPts.length === 0) {
+                  const initialPt = { x: snapCoord(rawM.x), y: snapCoord(rawM.y) };
+                  pushHistory(makeSnap());
+                  setSketchPts([initialPt]);
+                  setIsDrawing(true);
+                  setIsSketchPaused(false);
+                  setCursorPos(initialPt);
+                  suppressNextClickRef.current = true;
+                  touchDrawRef.current = {
+                    pointerId: e.pointerId,
+                    activePts: [initialPt],
+                    activeAxis: null,
+                    lastCleanCoord: null,
+                    startedFresh: true,
+                    didCommitTurn: false,
+                  };
+                } else {
+                  touchDrawRef.current = {
+                    pointerId: e.pointerId,
+                    activePts: [...sketchPts],
+                    activeAxis: null,
+                    lastCleanCoord: null,
+                    startedFresh: false,
+                    didCommitTurn: false,
+                  };
+                }
               }
               return;
             }
