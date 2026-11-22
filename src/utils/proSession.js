@@ -371,6 +371,51 @@ export async function signUpWithSupabase(email, password) {
   return data;
 }
 
+export function getGoogleClientId() {
+  return getEnv('VITE_GOOGLE_CLIENT_ID');
+}
+
+export function isDirectGoogleSignInSupported() {
+  if (typeof window === 'undefined') return false;
+  const clientId = getGoogleClientId();
+  if (!clientId) return false;
+  const isSecureOrigin =
+    window.location.protocol === 'https:' ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
+  return isSecureOrigin && Boolean(window.crypto?.subtle);
+}
+
+export async function createGoogleAuthNoncePair() {
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  const rawNonce = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  const encoded = new TextEncoder().encode(rawNonce);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', encoded);
+  const hashedNonce = Array.from(new Uint8Array(hashBuffer), (b) => b.toString(16).padStart(2, '0')).join('');
+  return { rawNonce, hashedNonce };
+}
+
+/**
+ * Exchanges a Google Identity Services `id_token` directly with Supabase Auth.
+ * Shows your own domain (sijiteksolutions.com / RoofCalc Pro) on Google's sign-in screen
+ * instead of `*.supabase.co`.
+ */
+export async function signInWithGoogleIdToken(idToken, rawNonce) {
+  if (!idToken) {
+    throw new Error('Google did not return a sign-in token.');
+  }
+  const data = await supabaseAuthRequest('/auth/v1/token?grant_type=id_token', {
+    provider: 'google',
+    id_token: idToken,
+    ...(rawNonce ? { nonce: rawNonce } : {}),
+  });
+  if (data?.access_token) {
+    saveAuthSession(data);
+  }
+  return data;
+}
+
 export function signInWithGoogle() {
   if (!isSupabaseConfigured() || typeof window === 'undefined') return;
   const url = getEnv('VITE_SUPABASE_URL').replace(/\/$/, '');

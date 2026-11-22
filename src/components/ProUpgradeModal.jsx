@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Crown,
   Sparkles,
@@ -18,6 +18,10 @@ import {
   signInWithSupabase,
   signUpWithSupabase,
   signInWithGoogle,
+  getGoogleClientId,
+  isDirectGoogleSignInSupported,
+  createGoogleAuthNoncePair,
+  signInWithGoogleIdToken,
   syncDevAuthSession,
   consumeOAuthCallbackFromUrl,
   getStoredReferralCode,
@@ -26,6 +30,33 @@ import {
   formatKoboAsCurrency,
   DEFAULT_SCAN_TOPUP_PACKS,
 } from '../utils/proSession';
+
+let googleGsiScriptPromise = null;
+function loadGoogleGsiScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('No browser window'));
+  if (window.google?.accounts?.id) return Promise.resolve(window.google);
+  if (!googleGsiScriptPromise) {
+    googleGsiScriptPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.google));
+        existing.addEventListener('error', () => reject(new Error('Failed to load Google Sign-In')));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve(window.google);
+      script.onerror = () => {
+        googleGsiScriptPromise = null;
+        reject(new Error('Failed to load Google Sign-In'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return googleGsiScriptPromise;
+}
 
 /**
  * Shared Pro Account, Influencer Referral Discount, and Pay-As-You-Go AI Scan Top-Up Modal.
@@ -52,6 +83,10 @@ export default function ProUpgradeModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [pastedCallbackUrl, setPastedCallbackUrl] = useState('');
   const [lanSyncBusy, setLanSyncBusy] = useState(false);
+  const [googleBtnReady, setGoogleBtnReady] = useState(false);
+  const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
+  const googleBtnHostRef = useRef(null);
+  const directGoogleSupported = isDirectGoogleSignInSupported();
 
   // Live Pro pricing + Scan Top-Up Packs + Referral Discount state
   const [pricingInfo, setPricingInfo] = useState({
@@ -120,6 +155,69 @@ export default function ProUpgradeModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, supabaseEnabled, isPremium, proAccessToken]);
+
+  // Render official Google Identity Services button when VITE_GOOGLE_CLIENT_ID is configured
+  // so Google's chooser shows sijiteksolutions.com / RoofCalc Pro instead of *.supabase.co
+  useEffect(() => {
+    if (!isOpen || !supabaseEnabled || proEmail || !directGoogleSupported) {
+      setGoogleBtnReady(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ rawNonce, hashedNonce }] = await Promise.all([
+          createGoogleAuthNoncePair(),
+          loadGoogleGsiScript(),
+        ]);
+        if (cancelled || !window.google?.accounts?.id || !googleBtnHostRef.current) return;
+
+        window.google.accounts.id.initialize({
+          client_id: getGoogleClientId(),
+          nonce: hashedNonce,
+          ux_mode: 'popup',
+          callback: async (response) => {
+            if (!response?.credential) return;
+            setErrorMsg('');
+            setFeedback('');
+            setGoogleAuthBusy(true);
+            try {
+              const session = await signInWithGoogleIdToken(response.credential, rawNonce);
+              if (session?.access_token) {
+                setFeedback('Signed in with Google.');
+                if (onAuthSuccess) await onAuthSuccess(session);
+              } else {
+                setErrorMsg('Google sign-in did not return a valid session.');
+              }
+            } catch (err) {
+              setErrorMsg(err?.message || 'Google sign-in failed.');
+            } finally {
+              setGoogleAuthBusy(false);
+            }
+          },
+        });
+
+        googleBtnHostRef.current.innerHTML = '';
+        const hostWidth = Math.min(400, Math.max(260, Math.round(googleBtnHostRef.current.clientWidth || 360)));
+        window.google.accounts.id.renderButton(googleBtnHostRef.current, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          width: hostWidth,
+        });
+        setGoogleBtnReady(true);
+      } catch {
+        if (!cancelled) setGoogleBtnReady(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, supabaseEnabled, proEmail, directGoogleSupported]);
 
   if (!isOpen) return null;
 
@@ -756,45 +854,90 @@ export default function ProUpgradeModal({
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={signInWithGoogle}
-                  style={{
-                    width: '100%',
-                    padding: '0.62rem 0.9rem',
-                    borderRadius: '9px',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: '#ffffff',
-                    color: '#0f172a',
-                    fontSize: '0.86rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.55rem',
-                  }}
-                >
-                  <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      fill="#4285F4"
-                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+                {directGoogleSupported ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.45rem', width: '100%' }}>
+                    <div
+                      ref={googleBtnHostRef}
+                      style={{
+                        width: '100%',
+                        minHeight: '42px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        opacity: googleAuthBusy ? 0.6 : 1,
+                        pointerEvents: googleAuthBusy ? 'none' : 'auto',
+                      }}
                     />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.37 24 12 24Z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.37 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
-                    />
-                  </svg>
-                  <span>Continue with Google (Gmail)</span>
-                </button>
+                    {googleAuthBusy && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: '#38bdf8' }}>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Signing in with Google...</span>
+                      </div>
+                    )}
+                    {!googleBtnReady && !googleAuthBusy && (
+                      <button
+                        type="button"
+                        onClick={signInWithGoogle}
+                        style={{
+                          width: '100%',
+                          padding: '0.62rem 0.9rem',
+                          borderRadius: '9px',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontSize: '0.86rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.55rem',
+                        }}
+                      >
+                        <span>Continue with Google (Gmail)</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={signInWithGoogle}
+                    style={{
+                      width: '100%',
+                      padding: '0.62rem 0.9rem',
+                      borderRadius: '9px',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '0.86rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.55rem',
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.37 24 12 24Z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.37 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"
+                      />
+                    </svg>
+                    <span>Continue with Google (Gmail)</span>
+                  </button>
+                )}
 
                 {isLanDev && (
                   <div
