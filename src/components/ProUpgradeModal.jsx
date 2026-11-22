@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { Crown, Sparkles, CheckCircle2, LogOut, RefreshCw, Loader2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Crown,
+  Sparkles,
+  CheckCircle2,
+  LogOut,
+  RefreshCw,
+  Loader2,
+  ExternalLink,
+  Tag,
+  Zap,
+  X,
+} from 'lucide-react';
 import {
   isSupabaseConfigured,
   startPaystackCheckout,
@@ -8,11 +19,15 @@ import {
   signInWithGoogle,
   syncDevAuthSession,
   consumeOAuthCallbackFromUrl,
+  getStoredReferralCode,
+  saveStoredReferralCode,
+  fetchPricingAndReferral,
+  formatKoboAsCurrency,
+  DEFAULT_SCAN_TOPUP_PACKS,
 } from '../utils/proSession';
 
 /**
- * Shared Pro Account & Upgrade modal used by PaperSketchModal & Mobile/Desktop Workspace.
- * Works both with live Supabase + Paystack in Vercel production and with local Pro Preview mode.
+ * Shared Pro Account, Influencer Referral Discount, and Pay-As-You-Go AI Scan Top-Up Modal.
  */
 export default function ProUpgradeModal({
   isOpen,
@@ -31,20 +46,158 @@ export default function ProUpgradeModal({
   const [email, setEmail] = useState(proEmail || '');
   const [password, setPassword] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutBusyId, setCheckoutBusyId] = useState(''); // '' | 'pro_upgrade' | pack.id
   const [feedback, setFeedback] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [pastedCallbackUrl, setPastedCallbackUrl] = useState('');
   const [lanSyncBusy, setLanSyncBusy] = useState(false);
 
-  if (!isOpen) return null;
+  // Live Pro pricing + Scan Top-Up Packs + Referral Discount state
+  const [pricingInfo, setPricingInfo] = useState({
+    baseAmountKobo: 1000000,
+    finalAmountKobo: 1000000,
+    discountPercent: 0,
+    discountKobo: 0,
+    currency: 'NGN',
+    includedScans: 100,
+    scanPacks: DEFAULT_SCAN_TOPUP_PACKS,
+  });
+  const [referralInput, setReferralInput] = useState(() => getStoredReferralCode());
+  const [appliedReferral, setAppliedReferral] = useState(null); // { code, influencerName, discountPercent, discountKobo, finalAmountKobo }
+  const [referralBusy, setReferralBusy] = useState(false);
+  const [referralError, setReferralError] = useState('');
 
   const supabaseEnabled = isSupabaseConfigured();
+
+  // Fetch live server pricing + auto-validate any saved ?ref=CODE whenever modal opens
+  useEffect(() => {
+    if (!isOpen || !supabaseEnabled) return;
+    let cancelled = false;
+    const savedCode = getStoredReferralCode();
+    if (savedCode && !referralInput) {
+      setReferralInput(savedCode);
+    }
+
+    (async () => {
+      try {
+        const data = await fetchPricingAndReferral({
+          code: isPremium ? '' : savedCode,
+          accessToken: proAccessToken,
+        });
+        if (cancelled) return;
+        setPricingInfo({
+          baseAmountKobo: data.baseAmountKobo || 1000000,
+          finalAmountKobo: data.valid ? data.finalAmountKobo : data.baseAmountKobo || 1000000,
+          discountPercent: data.valid ? data.discountPercent : 0,
+          discountKobo: data.valid ? data.discountKobo : 0,
+          currency: data.currency || 'NGN',
+          includedScans: data.includedScans || 100,
+          scanPacks: Array.isArray(data.scanPacks) && data.scanPacks.length > 0 ? data.scanPacks : DEFAULT_SCAN_TOPUP_PACKS,
+        });
+        if (!isPremium && savedCode) {
+          if (data.valid) {
+            setAppliedReferral({
+              code: data.code,
+              influencerName: data.influencerName || '',
+              discountPercent: data.discountPercent || 0,
+              discountKobo: data.discountKobo || 0,
+              finalAmountKobo: data.finalAmountKobo,
+            });
+            setReferralError('');
+          } else {
+            setAppliedReferral(null);
+            if (data.error) setReferralError(data.error);
+          }
+        }
+      } catch {
+        // Keep safe defaults if local/offline
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, supabaseEnabled, isPremium, proAccessToken]);
+
+  if (!isOpen) return null;
+
   const isLanDev =
     typeof window !== 'undefined' &&
     Boolean(import.meta.env?.DEV) &&
     window.location.hostname !== 'localhost' &&
     window.location.hostname !== '127.0.0.1';
+
+  const handleApplyReferral = async (e) => {
+    if (e) e.preventDefault();
+    const cleaned = String(referralInput || '').trim().toUpperCase();
+    setReferralError('');
+    if (!cleaned) {
+      saveStoredReferralCode('');
+      setAppliedReferral(null);
+      setPricingInfo((prev) => ({
+        ...prev,
+        finalAmountKobo: prev.baseAmountKobo,
+        discountPercent: 0,
+        discountKobo: 0,
+      }));
+      return;
+    }
+
+    setReferralBusy(true);
+    try {
+      const data = await fetchPricingAndReferral({
+        code: cleaned,
+        accessToken: proAccessToken,
+      });
+      if (data.valid) {
+        saveStoredReferralCode(data.code);
+        setReferralInput(data.code);
+        setAppliedReferral({
+          code: data.code,
+          influencerName: data.influencerName || '',
+          discountPercent: data.discountPercent || 0,
+          discountKobo: data.discountKobo || 0,
+          finalAmountKobo: data.finalAmountKobo,
+        });
+        setPricingInfo((prev) => ({
+          ...prev,
+          baseAmountKobo: data.baseAmountKobo || prev.baseAmountKobo,
+          finalAmountKobo: data.finalAmountKobo,
+          discountPercent: data.discountPercent || 0,
+          discountKobo: data.discountKobo || 0,
+          currency: data.currency || prev.currency,
+        }));
+        setReferralError('');
+      } else {
+        setAppliedReferral(null);
+        setPricingInfo((prev) => ({
+          ...prev,
+          finalAmountKobo: prev.baseAmountKobo,
+          discountPercent: 0,
+          discountKobo: 0,
+        }));
+        setReferralError(data.error || 'Referral code is invalid or inactive.');
+      }
+    } catch (err) {
+      setReferralError(err?.message || 'Could not validate referral code.');
+    } finally {
+      setReferralBusy(false);
+    }
+  };
+
+  const handleClearReferral = () => {
+    saveStoredReferralCode('');
+    setReferralInput('');
+    setAppliedReferral(null);
+    setReferralError('');
+    setPricingInfo((prev) => ({
+      ...prev,
+      finalAmountKobo: prev.baseAmountKobo,
+      discountPercent: 0,
+      discountKobo: 0,
+    }));
+  };
 
   const handleSyncFromLaptop = async () => {
     setErrorMsg('');
@@ -91,16 +244,37 @@ export default function ProUpgradeModal({
     }
   };
 
-  const handleStartCheckout = async () => {
-    setCheckoutBusy(true);
+  const handleStartProCheckout = async () => {
+    setCheckoutBusyId('pro_upgrade');
     setErrorMsg('');
     setFeedback('');
     try {
-      const checkoutUrl = await startPaystackCheckout(proAccessToken, proEmail || email);
+      const checkoutUrl = await startPaystackCheckout(proAccessToken, {
+        purchaseType: 'pro_upgrade',
+        referralCode: appliedReferral?.code || '',
+        fallbackEmail: proEmail || email,
+      });
       window.location.assign(checkoutUrl);
     } catch (err) {
       setErrorMsg(err?.message || 'Unable to launch Paystack checkout.');
-      setCheckoutBusy(false);
+      setCheckoutBusyId('');
+    }
+  };
+
+  const handleBuyScanPack = async (pack) => {
+    setCheckoutBusyId(pack.id);
+    setErrorMsg('');
+    setFeedback('');
+    try {
+      const checkoutUrl = await startPaystackCheckout(proAccessToken, {
+        purchaseType: 'scan_topup',
+        packId: pack.id,
+        fallbackEmail: proEmail || email,
+      });
+      window.location.assign(checkoutUrl);
+    } catch (err) {
+      setErrorMsg(err?.message || 'Unable to launch scan top-up checkout.');
+      setCheckoutBusyId('');
     }
   };
 
@@ -133,11 +307,20 @@ export default function ProUpgradeModal({
     }
   };
 
+  const currency = pricingInfo.currency || 'NGN';
+  const hasDiscount = Boolean(appliedReferral && pricingInfo.discountKobo > 0);
+  const displayFinalPrice = formatKoboAsCurrency(
+    hasDiscount ? pricingInfo.finalAmountKobo : pricingInfo.baseAmountKobo,
+    currency
+  );
+  const displayBasePrice = formatKoboAsCurrency(pricingInfo.baseAmountKobo, currency);
+  const isCheckoutBusy = Boolean(checkoutBusyId);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content paper-sketch-modal-card"
-        style={{ maxWidth: '460px', width: '92vw', padding: '1.35rem' }}
+        style={{ maxWidth: '480px', width: '94vw', padding: '1.35rem', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -175,7 +358,7 @@ export default function ProUpgradeModal({
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
             <Sparkles size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
             <span>
-              <strong>AI Sketch Auto-Dimension:</strong> Reads handwritten numbers in any orientation so you jump straight to a scaled 2D plan without manual resizing.
+              <strong>AI Sketch Auto-Dimension:</strong> Includes {pricingInfo.includedScans} AI scan credits; buy extra scans anytime at will (credits never expire).
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
@@ -198,16 +381,16 @@ export default function ProUpgradeModal({
             {proEmail ? (
               <div
                 style={{
-                  padding: '0.85rem',
+                  padding: '0.9rem',
                   borderRadius: '10px',
                   background: 'rgba(15, 23, 42, 0.55)',
                   border: '1px solid var(--border-color)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.6rem',
+                  gap: '0.75rem',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>{proEmail}</span>
                   <span
                     style={{
@@ -223,20 +406,249 @@ export default function ProUpgradeModal({
                   </span>
                 </div>
 
-                {isPremium && proQuota && (
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Monthly AI Sketch Scans: <strong>{proQuota.used}</strong> / {proQuota.limit} used ({proQuota.remaining} remaining)
-                  </div>
-                )}
+                {isPremium ? (
+                  /* Active Pro: Pay-As-You-Go AI Scan Credit Balance + On-Demand Top-Up Packs */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {proQuota && (
+                      <div
+                        style={{
+                          padding: '0.7rem 0.8rem',
+                          borderRadius: '9px',
+                          background:
+                            proQuota.remaining <= 0
+                              ? 'rgba(239, 68, 68, 0.12)'
+                              : proQuota.remaining <= 15
+                                ? 'rgba(245, 158, 11, 0.12)'
+                                : 'rgba(14, 165, 233, 0.1)',
+                          border: `1px solid ${
+                            proQuota.remaining <= 0
+                              ? 'rgba(239, 68, 68, 0.35)'
+                              : proQuota.remaining <= 15
+                                ? 'rgba(245, 158, 11, 0.35)'
+                                : 'rgba(56, 189, 248, 0.28)'
+                          }`,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.83rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          AI Sketch Scan Credits:{' '}
+                          <span style={{ color: proQuota.remaining <= 0 ? '#fca5a5' : '#38bdf8' }}>
+                            {proQuota.remaining} remaining
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                          {proQuota.used} used of {proQuota.limit} total credits • Pay-as-you-go (never expires)
+                        </div>
+                      </div>
+                    )}
 
-                {!isPremium && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {/* On-Demand Scan Top-Up Packs */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Zap size={14} style={{ color: '#fbbf24' }} />
+                          Buy Extra AI Scans (Pay Anytime, One-Time)
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.5rem' }}>
+                        {pricingInfo.scanPacks.map((pack) => {
+                          const busy = checkoutBusyId === pack.id;
+                          const isPopular = pack.id === 'scans_100';
+                          return (
+                            <button
+                              key={pack.id}
+                              type="button"
+                              disabled={isCheckoutBusy}
+                              onClick={() => handleBuyScanPack(pack)}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '0.32rem',
+                                padding: '0.72rem 0.45rem',
+                                borderRadius: '10px',
+                                border: `1px solid ${isPopular ? 'rgba(245, 158, 11, 0.65)' : 'var(--border-color)'}`,
+                                background: isPopular
+                                  ? 'rgba(245, 158, 11, 0.12)'
+                                  : 'rgba(2, 6, 23, 0.55)',
+                                color: 'var(--text-primary)',
+                                cursor: isCheckoutBusy ? 'wait' : 'pointer',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: '0.64rem',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.03em',
+                                  color: isPopular ? '#fbbf24' : '#38bdf8',
+                                }}
+                              >
+                                {pack.badge}
+                              </span>
+                              <span style={{ fontSize: '0.86rem', fontWeight: 800 }}>
+                                +{pack.scans} Scans
+                              </span>
+                              <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#34d399' }}>
+                                {busy ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  formatKoboAsCurrency(pack.amountKobo, currency)
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn-secondary-action"
+                        onClick={onRefreshStatus}
+                        disabled={isCheckoutBusy}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.78rem' }}
+                      >
+                        <RefreshCw size={13} />
+                        Refresh Scan Balance
+                      </button>
+                    </div>
+
+                    {errorMsg && (
+                      <div style={{ fontSize: '0.76rem', color: '#f87171', lineHeight: 1.4 }}>
+                        {errorMsg}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Free Plan: Pro Pricing + Influencer Referral Code Discount + Upgrade Checkout */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                    {/* Price Banner */}
+                    <div
+                      style={{
+                        padding: '0.7rem 0.8rem',
+                        borderRadius: '9px',
+                        background: hasDiscount ? 'rgba(16, 185, 129, 0.1)' : 'rgba(2, 6, 23, 0.45)',
+                        border: `1px solid ${hasDiscount ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-color)'}`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.4rem',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          RoofCalc Pro (includes {pricingInfo.includedScans} AI scans)
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', marginTop: '0.1rem' }}>
+                          {hasDiscount && (
+                            <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                              {displayBasePrice}
+                            </span>
+                          )}
+                          <span style={{ fontSize: '1.18rem', fontWeight: 800, color: hasDiscount ? '#34d399' : '#f8fafc' }}>
+                            {displayFinalPrice}
+                          </span>
+                        </div>
+                      </div>
+                      {hasDiscount && (
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '999px',
+                            background: 'rgba(16, 185, 129, 0.2)',
+                            color: '#34d399',
+                          }}
+                        >
+                          {appliedReferral.discountPercent}% OFF • {appliedReferral.code}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Referral / Promo Code Input */}
+                    <form onSubmit={handleApplyReferral} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      <label style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Tag size={12} style={{ color: '#38bdf8' }} />
+                        Have an influencer or referral code?
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={referralInput}
+                          onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                          placeholder="Enter code (e.g. CHUKA15)"
+                          disabled={referralBusy || isCheckoutBusy}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: '0.45rem 0.65rem',
+                            borderRadius: '8px',
+                            border: '1px solid var(--border-color)',
+                            background: 'rgba(2, 6, 23, 0.55)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.8rem',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                          }}
+                        />
+                        {appliedReferral ? (
+                          <button
+                            type="button"
+                            className="btn-secondary-action"
+                            onClick={handleClearReferral}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.45rem 0.65rem', fontSize: '0.76rem' }}
+                          >
+                            <X size={13} />
+                            Remove
+                          </button>
+                        ) : (
+                          <button
+                            type="submit"
+                            className="btn-secondary-action"
+                            disabled={referralBusy || !referralInput.trim()}
+                            style={{ padding: '0.45rem 0.75rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                          >
+                            {referralBusy ? <Loader2 size={13} className="animate-spin" /> : 'Apply'}
+                          </button>
+                        )}
+                      </div>
+                      {appliedReferral && (
+                        <div style={{ fontSize: '0.73rem', color: '#34d399' }}>
+                          Code <strong>{appliedReferral.code}</strong> applied
+                          {appliedReferral.influencerName ? ` (${appliedReferral.influencerName})` : ''} — you save{' '}
+                          {formatKoboAsCurrency(appliedReferral.discountKobo, currency)}!
+                        </div>
+                      )}
+                      {referralError && (
+                        <div style={{ fontSize: '0.73rem', color: '#fca5a5' }}>{referralError}</div>
+                      )}
+                    </form>
+
+                    {/* Checkout & Refresh Buttons */}
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         className="btn-primary-action"
-                        onClick={handleStartCheckout}
-                        disabled={checkoutBusy}
+                        onClick={handleStartProCheckout}
+                        disabled={isCheckoutBusy}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -244,14 +656,14 @@ export default function ProUpgradeModal({
                           fontSize: '0.82rem',
                         }}
                       >
-                        {checkoutBusy ? (
+                        {checkoutBusyId === 'pro_upgrade' ? (
                           <>
-                            <Loader2 size={14} className="spin" />
+                            <Loader2 size={14} className="animate-spin" />
                             <span>Redirecting to Paystack...</span>
                           </>
                         ) : (
                           <>
-                            <span>Upgrade to Pro</span>
+                            <span>Upgrade to Pro — {displayFinalPrice}</span>
                             <ExternalLink size={14} />
                           </>
                         )}
@@ -260,7 +672,7 @@ export default function ProUpgradeModal({
                         type="button"
                         className="btn-secondary-action"
                         onClick={onRefreshStatus}
-                        disabled={checkoutBusy}
+                        disabled={isCheckoutBusy}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
                       >
                         <RefreshCw size={14} />
@@ -297,6 +709,28 @@ export default function ProUpgradeModal({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {appliedReferral && (
+                  <div
+                    style={{
+                      padding: '0.55rem 0.75rem',
+                      borderRadius: '9px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      fontSize: '0.76rem',
+                      color: '#6ee7b7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                    }}
+                  >
+                    <Tag size={14} />
+                    <span>
+                      Referral code <strong>{appliedReferral.code}</strong> ({appliedReferral.discountPercent}% off →{' '}
+                      <strong>{displayFinalPrice}</strong>) is ready — sign in to claim it!
+                    </span>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={signInWithGoogle}
@@ -368,7 +802,7 @@ export default function ProUpgradeModal({
                         padding: '0.45rem 0.65rem',
                       }}
                     >
-                      {lanSyncBusy ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+                      {lanSyncBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
                       <span>Sync Sign-In from Laptop</span>
                     </button>
                     <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
@@ -422,75 +856,75 @@ export default function ProUpgradeModal({
                 </div>
 
                 <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  {['signin', 'signup'].map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setAuthMode(mode)}
-                      style={{
-                        flex: 1,
-                        padding: '0.45rem',
-                        borderRadius: '8px',
-                        border: `1px solid ${authMode === mode ? '#0ea5e9' : 'var(--border-color)'}`,
-                        background: authMode === mode ? 'rgba(14, 165, 233, 0.14)' : 'transparent',
-                        color: authMode === mode ? '#38bdf8' : 'var(--text-secondary)',
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {mode === 'signin' ? 'Sign In' : 'Create Account'}
-                    </button>
-                  ))}
-                </div>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    {['signin', 'signup'].map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setAuthMode(mode)}
+                        style={{
+                          flex: 1,
+                          padding: '0.45rem',
+                          borderRadius: '8px',
+                          border: `1px solid ${authMode === mode ? '#0ea5e9' : 'var(--border-color)'}`,
+                          background: authMode === mode ? 'rgba(14, 165, 233, 0.14)' : 'transparent',
+                          color: authMode === mode ? '#38bdf8' : 'var(--text-secondary)',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                      </button>
+                    ))}
+                  </div>
 
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email address"
-                  required
-                  style={{
-                    padding: '0.55rem 0.7rem',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    background: 'rgba(2, 6, 23, 0.55)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                  }}
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password (min 6 chars)"
-                  required
-                  style={{
-                    padding: '0.55rem 0.7rem',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border-color)',
-                    background: 'rgba(2, 6, 23, 0.55)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                  }}
-                />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email address"
+                    required
+                    style={{
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      background: 'rgba(2, 6, 23, 0.55)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password (min 6 chars)"
+                    required
+                    style={{
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      background: 'rgba(2, 6, 23, 0.55)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.85rem',
+                    }}
+                  />
 
-                {(errorMsg || initialError) && (
-                  <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
-                )}
-                {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
+                  {(errorMsg || initialError) && (
+                    <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                  )}
+                  {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
 
-                <button
-                  type="submit"
-                  className="btn-primary-action"
-                  disabled={isBusy}
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
-                >
-                  {isBusy && <Loader2 size={15} className="animate-spin" />}
-                  <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    className="btn-primary-action"
+                    disabled={isBusy}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                  >
+                    {isBusy && <Loader2 size={15} className="animate-spin" />}
+                    <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                  </button>
+                </form>
               </div>
             )}
           </div>

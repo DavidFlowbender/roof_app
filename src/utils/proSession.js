@@ -8,6 +8,143 @@ const PRO_STATUS_CACHE_KEY = 'roofcalc_pro_status_v1';
 const PREVIEW_PRO_KEY = 'roofcalc_preview_pro_v1';
 const PENDING_PAYSTACK_REF_KEY = 'roofcalc_pending_paystack_ref_v1';
 const PENDING_PAYSTACK_TTL_MS = 24 * 60 * 60 * 1000;
+const REFERRAL_CODE_KEY = 'roofcalc_referral_code_v1';
+const REFERRAL_CODE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const DEFAULT_SCAN_TOPUP_PACKS = [
+  { id: 'scans_50', label: '+50 AI Scans', scans: 50, amountKobo: 300000, badge: 'Quick Boost' },
+  { id: 'scans_100', label: '+100 AI Scans', scans: 100, amountKobo: 500000, badge: 'Most Popular' },
+  { id: 'scans_250', label: '+250 AI Scans', scans: 250, amountKobo: 1000000, badge: 'Best Value' },
+];
+
+export function formatKoboAsCurrency(amountKobo, currency = 'NGN') {
+  const major = Math.round((Number(amountKobo) || 0) / 100);
+  if (String(currency || 'NGN').toUpperCase() === 'NGN') {
+    return `₦${major.toLocaleString('en-NG')}`;
+  }
+  return `${String(currency || 'NGN').toUpperCase()} ${major.toLocaleString()}`;
+}
+
+export function saveStoredReferralCode(code) {
+  try {
+    const clean = String(code || '').trim().toUpperCase();
+    if (!clean) {
+      localStorage.removeItem(REFERRAL_CODE_KEY);
+      return;
+    }
+    localStorage.setItem(
+      REFERRAL_CODE_KEY,
+      JSON.stringify({ code: clean, savedAt: Date.now() })
+    );
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+export function getStoredReferralCode() {
+  try {
+    const raw = localStorage.getItem(REFERRAL_CODE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    if (!parsed?.code) return '';
+    if (parsed.savedAt && Date.now() - Number(parsed.savedAt) > REFERRAL_CODE_TTL_MS) {
+      localStorage.removeItem(REFERRAL_CODE_KEY);
+      return '';
+    }
+    return String(parsed.code).trim().toUpperCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Captures `?ref=CODE` or `?promo=CODE` from shareable influencer links and persists it
+ * across Google OAuth redirects and future visits.
+ */
+export function captureReferralCodeFromUrl() {
+  if (typeof window === 'undefined') return getStoredReferralCode();
+  try {
+    const url = new URL(window.location.href);
+    const ref = (url.searchParams.get('ref') || url.searchParams.get('promo') || '').trim().toUpperCase();
+    if (ref && /^[A-Z0-9_-]{3,32}$/.test(ref)) {
+      saveStoredReferralCode(ref);
+      url.searchParams.delete('ref');
+      url.searchParams.delete('promo');
+      const cleanSearch = url.searchParams.toString();
+      window.history.replaceState(
+        {},
+        '',
+        `${url.pathname}${cleanSearch ? `?${cleanSearch}` : ''}${url.hash || ''}`
+      );
+      return ref;
+    }
+  } catch {
+    // Ignore URL parse errors
+  }
+  return getStoredReferralCode();
+}
+
+export function extractPartnerLinkFromUrl() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = new URL(window.location.href);
+    const code = (url.searchParams.get('partner') || '').trim().toUpperCase();
+    const token = (url.searchParams.get('token') || '').trim();
+    if (code && token) {
+      return { code, token };
+    }
+  } catch {
+    // Ignore URL parse errors
+  }
+  return null;
+}
+
+export async function fetchPartnerStats(code, token) {
+  const resp = await fetch('/api/partner-stats', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, token }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error || `Could not load partner earnings (${resp.status}).`);
+  }
+  return data;
+}
+
+export async function fetchPricingAndReferral({ code = '', accessToken = '' } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  const resp = await fetch('/api/validate-referral', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ code: String(code || '').trim().toUpperCase() }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error || `Could not check pricing (${resp.status}).`);
+  }
+  return data;
+}
+
+export function hasPendingPaystackCheck() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const url = new URL(window.location.href);
+    if (
+      url.searchParams.get('paystack_verify') === '1' ||
+      Boolean(url.searchParams.get('reference')) ||
+      Boolean(url.searchParams.get('trxref'))
+    ) {
+      return true;
+    }
+  } catch {
+    // Ignore URL parse errors
+  }
+  return Boolean(getPendingPaystackRef());
+}
 
 export function savePendingPaystackRef(reference) {
   try {
@@ -112,7 +249,7 @@ export function saveAuthSession(session, options = {}) {
         session: session || null,
         proStatus: session ? getStoredProStatus() : null,
       }),
-    }).catch(() => {});
+    }).catch(() => { });
   }
 }
 
@@ -129,7 +266,7 @@ export async function syncDevAuthSession(existingSession = null) {
         session: existingSession,
         proStatus: getStoredProStatus(),
       }),
-    }).catch(() => {});
+    }).catch(() => { });
     return existingSession;
   }
   try {
@@ -361,10 +498,21 @@ export async function fetchSupabaseProProfile(session) {
   };
 }
 
-export async function startPaystackCheckout(accessToken, fallbackEmail = '') {
+export async function startPaystackCheckout(accessToken, optionsOrFallbackEmail = '') {
   if (!accessToken) {
-    throw new Error('Please sign in first before upgrading to Pro.');
+    throw new Error('Please sign in first before checking out.');
   }
+  const opts =
+    typeof optionsOrFallbackEmail === 'string'
+      ? { fallbackEmail: optionsOrFallbackEmail }
+      : optionsOrFallbackEmail || {};
+  const {
+    purchaseType = 'pro_upgrade',
+    packId = null,
+    referralCode = '',
+    fallbackEmail = '',
+  } = opts;
+
   const returnOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const resp = await fetch('/api/create-checkout', {
     method: 'POST',
@@ -372,12 +520,17 @@ export async function startPaystackCheckout(accessToken, fallbackEmail = '') {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ returnOrigin }),
+    body: JSON.stringify({
+      returnOrigin,
+      purchaseType,
+      ...(packId ? { packId } : {}),
+      ...(referralCode ? { referralCode: String(referralCode).trim().toUpperCase() } : {}),
+    }),
   });
 
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    if (data?.code === 'PAYMENT_NOT_CONFIGURED') {
+    if (data?.code === 'PAYMENT_NOT_CONFIGURED' && purchaseType === 'pro_upgrade') {
       const staticUrl = getPaystackCheckoutUrl(fallbackEmail);
       if (staticUrl) return staticUrl;
     }
@@ -396,7 +549,7 @@ export async function startPaystackCheckout(accessToken, fallbackEmail = '') {
 
 export async function verifyPaystackPaymentOnReturn(accessToken) {
   if (typeof window === 'undefined' || !accessToken) {
-    return { checked: false, verified: false, fromUrl: false, error: '' };
+    return { checked: false, verified: false, fromUrl: false, error: '', purchaseType: null, scansAdded: 0 };
   }
 
   const url = new URL(window.location.href);
@@ -424,6 +577,8 @@ export async function verifyPaystackPaymentOnReturn(accessToken) {
       verified: false,
       fromUrl,
       error: hasVerifyFlag ? 'Missing Paystack transaction reference.' : '',
+      purchaseType: null,
+      scansAdded: 0,
     };
   }
 
@@ -450,19 +605,32 @@ export async function verifyPaystackPaymentOnReturn(accessToken) {
         verified: false,
         fromUrl,
         error: data?.error || `Payment verification failed (${resp.status}).`,
+        purchaseType: null,
+        scansAdded: 0,
       };
     }
     const verified = Boolean(data?.verified);
     if (verified) {
       savePendingPaystackRef(null);
     }
-    return { checked: true, verified, fromUrl, error: '' };
+    return {
+      checked: true,
+      verified,
+      fromUrl,
+      error: '',
+      purchaseType: data?.purchaseType || 'pro_upgrade',
+      scansAdded: Number(data?.scansAdded) || 0,
+      quota: data?.quota || null,
+      referralCode: data?.referralCode || null,
+    };
   } catch (err) {
     return {
       checked: true,
       verified: false,
       fromUrl,
       error: err?.message || 'Network error while verifying payment.',
+      purchaseType: null,
+      scansAdded: 0,
     };
   }
 }

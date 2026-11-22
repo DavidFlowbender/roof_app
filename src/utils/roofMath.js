@@ -191,7 +191,7 @@ export function getEffectivePolygonSpan(polygonVertices = null) {
  * Offsets a simple polygon outward by `offsetDist` (in meters) for 2D eave boundary visualization
  */
 export function offsetPolygonVertices(vertices = [], offsetDist = 0.45) {
-  if (!vertices || vertices.length < 3 || offsetDist <= 0.001) return vertices || [];
+  if (!vertices || vertices.length < 3 || Math.abs(offsetDist) <= 0.001) return vertices || [];
   const n = vertices.length;
 
   // Determine winding order (signed area in screen/meter space)
@@ -239,6 +239,18 @@ export function offsetPolygonVertices(vertices = [], offsetDist = 0.45) {
         x: round(curr.x + bx * miter, 3),
         y: round(curr.y + by * miter, 3),
       });
+    }
+  }
+  // Guard against inward offsets collapsing tiny polygons
+  if (offsetDist < 0) {
+    let newSignedArea2 = 0;
+    for (let i = 0; i < result.length; i++) {
+      const p1 = result[i];
+      const p2 = result[(i + 1) % result.length];
+      newSignedArea2 += p1.x * p2.y - p2.x * p1.y;
+    }
+    if (Math.abs(newSignedArea2) < 0.25 || Math.sign(newSignedArea2) !== Math.sign(signedArea2)) {
+      return vertices;
     }
   }
   return result;

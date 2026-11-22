@@ -86,7 +86,7 @@ async function verifySupabaseProUser(authHeader, supabaseUrl, serviceKey) {
   const profResp = await fetch(
     `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(
       user.id
-    )}&select=id,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,ai_scans_reset_at`,
+    )}&select=id,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit`,
     { headers: getSupabaseAdminHeaders(serviceKey) }
   );
   if (!profResp.ok) {
@@ -100,29 +100,17 @@ async function verifySupabaseProUser(authHeader, supabaseUrl, serviceKey) {
     return { ok: false, status: 403, code: 'PRO_REQUIRED', error: 'AI Sketch Scanning requires an active Pro plan.' };
   }
 
-  const defaultLimit = Number(process.env.PRO_MONTHLY_AI_SCANS || 100);
+  const defaultLimit = Number(process.env.PRO_INITIAL_AI_SCANS || process.env.PRO_MONTHLY_AI_SCANS || 100);
   const limit = Number(profile.ai_scans_limit) > 0 ? Number(profile.ai_scans_limit) : defaultLimit;
-  let used = Number(profile.ai_scans_used) || 0;
+  const used = Number(profile.ai_scans_used) || 0;
 
-  // Auto-reset monthly scan counter if past ai_scans_reset_at
-  const now = new Date();
-  const resetAt = profile.ai_scans_reset_at ? new Date(profile.ai_scans_reset_at) : null;
-  if (resetAt && resetAt <= now) {
-    used = 0;
-    const nextReset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
-    await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
-      method: 'PATCH',
-      headers: getSupabaseAdminHeaders(serviceKey),
-      body: JSON.stringify({ ai_scans_used: 0, ai_scans_reset_at: nextReset }),
-    });
-  }
-
+  // Pay-as-you-go AI scan credits: never auto-reset monthly; users buy Scan Top-Up packs at will when finished.
   if (used >= limit) {
     return {
       ok: false,
       status: 429,
       code: 'QUOTA_EXCEEDED',
-      error: `Monthly Pro AI scan quota reached (${used}/${limit}).`,
+      error: `You have used all ${limit} AI scan credits. Buy an on-demand Scan Top-Up pack in RoofCalc Pro to continue.`,
     };
   }
 

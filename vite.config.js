@@ -103,6 +103,8 @@ function localVercelApiBridge() {
           for await (const chunk of req) chunks.push(chunk);
           const raw = Buffer.concat(chunks).toString('utf8');
           req.body = raw ? JSON.parse(raw) : {};
+          const parsedUrl = new URL(req.url || '/', 'http://localhost');
+          req.query = Object.fromEntries(parsedUrl.searchParams.entries());
 
           if (!req.headers?.authorization && devSharedSession?.access_token) {
             req.headers = {

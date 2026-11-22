@@ -912,107 +912,10 @@ export default function MobileWorkspace({
           {/* PAGE: 2D PLAN & FINGER SKETCH */}
           {activePage === '2d' && (
             <>
-              {/* Slim 1-Row Quick Dimensions Bar (No scrolling) */}
-              <div
-                style={{
-                  flexShrink: 0,
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr auto',
-                  gap: '6px',
-                  alignItems: 'center',
-                }}
-              >
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: '#111827',
-                    border: '1px solid #1f2937',
-                    borderRadius: '8px',
-                    padding: '5px 8px',
-                    gap: '4px',
-                  }}
-                >
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>L({unitLabel})</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.5"
-                    value={displayLength}
-                    onChange={(e) => handleLengthChange(e.target.value)}
-                    style={{
-                      width: '54px',
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      color: '#f8fafc',
-                      fontSize: '13.5px',
-                      fontWeight: 700,
-                      textAlign: 'right',
-                    }}
-                  />
-                </label>
-
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: '#111827',
-                    border: '1px solid #1f2937',
-                    borderRadius: '8px',
-                    padding: '5px 8px',
-                    gap: '4px',
-                  }}
-                >
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>W({unitLabel})</span>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.5"
-                    value={displayBreadth}
-                    onChange={(e) => handleBreadthChange(e.target.value)}
-                    style={{
-                      width: '54px',
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      color: '#f8fafc',
-                      fontSize: '13.5px',
-                      fontWeight: 700,
-                      textAlign: 'right',
-                    }}
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => setUnitSystem(unitSystem === UNIT_SYSTEMS.METRIC ? UNIT_SYSTEMS.IMPERIAL : UNIT_SYSTEMS.METRIC)}
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: '#1e293b',
-                    color: '#38bdf8',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    padding: '5px 10px',
-                    fontSize: '11.5px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title="Toggle Metric (m) / Imperial (ft)"
-                >
-                  Unit: {unitLabel}
-                </button>
-              </div>
-
               {handleStageSelect && (
                 <div
                   style={{
+                    flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
@@ -1049,6 +952,28 @@ export default function MobileWorkspace({
                       );
                     })}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setUnitSystem(unitSystem === UNIT_SYSTEMS.METRIC ? UNIT_SYSTEMS.IMPERIAL : UNIT_SYSTEMS.METRIC)}
+                    style={{
+                      flexShrink: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: '#1e293b',
+                      color: '#38bdf8',
+                      border: '1px solid #334155',
+                      borderRadius: '7px',
+                      padding: '5px 8px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title="Toggle Metric (m) / Imperial (ft)"
+                  >
+                    {unitLabel}
+                  </button>
                 </div>
               )}
 
@@ -1091,6 +1016,7 @@ export default function MobileWorkspace({
                         −
                       </button>
                       <input
+                        className="compact-num-input"
                         type="number"
                         min="0"
                         max="2"
@@ -1101,7 +1027,7 @@ export default function MobileWorkspace({
                           handleFoundationOverhangChange && handleFoundationOverhangChange(e.target.value)
                         }
                         style={{
-                          width: '48px',
+                          width: '50px',
                           background: '#090e1a',
                           color: '#34d399',
                           border: '1px solid #334155',
@@ -1297,6 +1223,7 @@ export default function MobileWorkspace({
                             −
                           </button>
                           <input
+                            className="compact-num-input"
                             type="number"
                             min="0.2"
                             max="8.5"
@@ -1307,7 +1234,7 @@ export default function MobileWorkspace({
                               const v = Number(e.target.value);
                               if (Number.isFinite(v) && v >= 0.2) handleTweakKingpost(v);
                             }}
-                            style={{ width: '44px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                            style={{ width: '46px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
                           <span style={{ fontSize: '10px', color: '#94a3b8' }}>m</span>
                           <button
@@ -1324,7 +1251,7 @@ export default function MobileWorkspace({
                       {/* Angle of Inclination Control */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
                         <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>Angle</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <button
                             type="button"
                             onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
@@ -1334,6 +1261,7 @@ export default function MobileWorkspace({
                             −
                           </button>
                           <input
+                            className="compact-num-input"
                             type="number"
                             min="5"
                             max="68"
@@ -1344,7 +1272,7 @@ export default function MobileWorkspace({
                               const v = Number(e.target.value);
                               if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
                             }}
-                            style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                            style={{ width: '40px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
                           <span style={{ fontSize: '10px', color: '#fbbf24' }}>°</span>
                           <button
@@ -1472,6 +1400,7 @@ export default function MobileWorkspace({
                             −
                           </button>
                           <input
+                            className="compact-num-input"
                             type="number"
                             min="0.2"
                             max="8.5"
@@ -1482,7 +1411,7 @@ export default function MobileWorkspace({
                               const v = Number(e.target.value);
                               if (Number.isFinite(v) && v >= 0.2) handleTweakKingpost(v);
                             }}
-                            style={{ width: '44px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                            style={{ width: '46px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
                           <span style={{ fontSize: '10px', color: '#94a3b8' }}>m</span>
                           <button
@@ -1499,7 +1428,7 @@ export default function MobileWorkspace({
                       {/* Pitch Angle Control */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '4px 6px', gap: '4px' }}>
                         <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: 700 }}>Angle</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <button
                             type="button"
                             onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
@@ -1509,6 +1438,7 @@ export default function MobileWorkspace({
                             −
                           </button>
                           <input
+                            className="compact-num-input"
                             type="number"
                             min="5"
                             max="68"
@@ -1519,7 +1449,7 @@ export default function MobileWorkspace({
                               const v = Number(e.target.value);
                               if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
                             }}
-                            style={{ width: '36px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12px', fontWeight: 800, textAlign: 'center' }}
+                            style={{ width: '40px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
                           <span style={{ fontSize: '10px', color: '#38bdf8' }}>°</span>
                           <button

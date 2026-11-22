@@ -2,11 +2,12 @@ import crypto from 'node:crypto';
 import {
   getSupabaseConfig,
   getSupabaseAdminHeaders,
-  activateProForUser,
 } from './_supabase.js';
+import { fulfillVerifiedPaystackTransaction } from './_billing.js';
 
 /**
- * Paystack Webhook -> Automatically activates/renews/revokes Pro plan in Supabase `profiles`
+ * Paystack Webhook -> Automatically fulfills Pro upgrades, AI Scan Top-Up packs,
+ * and Option A influencer referral commissions idempotently in Supabase.
  * Deploy on Vercel at /api/paystack-webhook
  */
 export default async function handler(req, res) {
@@ -41,7 +42,6 @@ export default async function handler(req, res) {
   const data = event?.data || {};
   const email = data?.customer?.email || null;
   const userId = data?.metadata?.user_id || null;
-  const customerCode = data?.customer?.customer_code || null;
 
   if (!email && !userId) {
     return res.status(200).json({ received: true, ignored: 'No customer identifier' });
@@ -52,10 +52,14 @@ export default async function handler(req, res) {
     eventType === 'subscription.create' ||
     eventType === 'invoice.payment_succeeded'
   ) {
-    await activateProForUser(supabaseUrl, supabaseServiceKey, {
-      userId,
-      email,
-      customerCode,
+    // Ensure a reference exists even for subscription/invoice events
+    const txPayload = {
+      ...data,
+      reference: data?.reference || `evt_${eventType}_${data?.id || Date.now()}`,
+    };
+    await fulfillVerifiedPaystackTransaction(supabaseUrl, supabaseServiceKey, txPayload, {
+      fallbackUserId: userId,
+      fallbackEmail: email,
     });
   } else if (eventType === 'subscription.disable' || eventType === 'subscription.not_renew') {
     const filter = userId

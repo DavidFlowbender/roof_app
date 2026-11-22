@@ -1,9 +1,21 @@
-import { getSupabaseConfig, verifySupabaseSessionUser } from './_supabase.js';
+import {
+  getSupabaseConfig,
+  verifySupabaseSessionUser,
+  getSupabaseProfile,
+} from './_supabase.js';
+import {
+  getProBaseAmountKobo,
+  getCurrencyCode,
+  getScanPackById,
+  normalizeReferralCode,
+  lookupReferralCode,
+} from './_billing.js';
 
 /**
  * POST /api/create-checkout
- * Initializes a Paystack transaction tied directly to the signed-in user's ID & email
- * so payment confirmation upgrades them to Pro automatically.
+ * Initializes a Paystack transaction for either:
+ *   1. `purchaseType: 'pro_upgrade'` (with optional server-verified influencer referral code discount)
+ *   2. `purchaseType: 'scan_topup'`  (pay-as-you-go AI scan packs for Pro users; credits never expire)
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -51,20 +63,94 @@ export default async function handler(req, res) {
   const cleanOrigin = String(rawOrigin || '').replace(/\/$/, '');
   const callbackUrl = cleanOrigin ? `${cleanOrigin}/?paystack_verify=1` : undefined;
 
-  const amount = Math.max(10000, Number(process.env.PAYSTACK_PRO_AMOUNT_KOBO || 500000));
-  const currency = (process.env.PAYSTACK_CURRENCY || 'NGN').trim().toUpperCase();
+  const purchaseType = req.body?.purchaseType === 'scan_topup' ? 'scan_topup' : 'pro_upgrade';
+  const currency = getCurrencyCode();
   const planCode = (process.env.PAYSTACK_PLAN_CODE || '').trim();
+
+  let amount = getProBaseAmountKobo();
+  let usePlanCode = Boolean(planCode);
+  let metadata = {
+    user_id: user.id,
+    app: 'roofcalc_pro',
+    purchase_type: purchaseType,
+  };
+
+  if (purchaseType === 'scan_topup') {
+    usePlanCode = false;
+    const profile = await getSupabaseProfile(supabaseUrl, supabaseServiceKey, {
+      userId: user.id,
+      email: user.email,
+    });
+    const isExpired = profile?.plan_expires_at && new Date(profile.plan_expires_at) <= new Date();
+    if (!profile?.is_pro || isExpired) {
+      return res.status(403).json({
+        code: 'PRO_REQUIRED',
+        error: 'Active RoofCalc Pro plan is required before buying AI scan packs.',
+      });
+    }
+
+    const pack = getScanPackById(req.body?.packId);
+    if (!pack) {
+      return res.status(400).json({
+        code: 'INVALID_PACK',
+        error: 'Please select a valid AI scan top-up pack.',
+      });
+    }
+
+    amount = pack.amountKobo;
+    metadata = {
+      ...metadata,
+      pack_id: pack.id,
+      scans_added: pack.scans,
+      pack_label: pack.label,
+    };
+  } else {
+    const baseAmountKobo = getProBaseAmountKobo();
+    amount = baseAmountKobo;
+
+    const rawReferral = String(req.body?.referralCode || '').trim();
+    if (rawReferral) {
+      const cleanCode = normalizeReferralCode(rawReferral);
+      if (!cleanCode) {
+        return res.status(400).json({
+          code: 'INVALID_REFERRAL',
+          error: 'Invalid referral code format.',
+        });
+      }
+      const refCheck = await lookupReferralCode(supabaseUrl, supabaseServiceKey, cleanCode, {
+        buyerEmail: user.email,
+        strictActive: true,
+      });
+      if (!refCheck.ok) {
+        return res.status(400).json({
+          code: 'INVALID_REFERRAL',
+          error: refCheck.error || 'Referral code could not be applied.',
+        });
+      }
+
+      amount = refCheck.finalAmountKobo;
+      // Do not attach a fixed Paystack subscription plan code when a custom referral discount is applied
+      if (refCheck.discountKobo > 0) {
+        usePlanCode = false;
+      }
+      metadata = {
+        ...metadata,
+        referral_code: refCheck.code,
+        influencer_name: refCheck.influencerName,
+        discount_percent: refCheck.discountPercent,
+        original_amount_kobo: refCheck.baseAmountKobo,
+        discount_kobo: refCheck.discountKobo,
+      };
+    }
+  }
 
   const initBody = {
     email: user.email,
     amount,
     currency,
     ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-    ...(planCode ? { plan: planCode } : {}),
-    metadata: {
-      user_id: user.id,
-      app: 'roofcalc_pro',
-    },
+    ...(usePlanCode && planCode ? { plan: planCode } : {}),
+    metadata,
   };
 
   try {
@@ -88,6 +174,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       authorization_url: payData.data.authorization_url,
       reference: payData.data.reference,
+      amountKobo: amount,
+      purchaseType,
     });
   } catch (err) {
     return res.status(502).json({

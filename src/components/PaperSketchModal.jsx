@@ -569,7 +569,36 @@ export default function PaperSketchModal({
                     <Crown size={13} />
                     Pro AI Auto-Dimension Active
                   </span>
-                  <span>{proQuota ? `${proQuota.remaining} scans left` : 'Ready'}</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: proQuota && proQuota.remaining <= 0 ? '#fca5a5' : 'var(--text-muted)' }}>
+                      {proQuota ? `${proQuota.remaining} scan credits left` : 'Ready'}
+                    </span>
+                    {onOpenUpgrade && (
+                      <button
+                        type="button"
+                        onClick={onOpenUpgrade}
+                        style={{
+                          background:
+                            proQuota && proQuota.remaining <= 15
+                              ? 'rgba(245, 158, 11, 0.2)'
+                              : 'rgba(14, 165, 233, 0.14)',
+                          border: `1px solid ${
+                            proQuota && proQuota.remaining <= 15
+                              ? 'rgba(245, 158, 11, 0.55)'
+                              : 'rgba(56, 189, 248, 0.4)'
+                          }`,
+                          color: proQuota && proQuota.remaining <= 15 ? '#fbbf24' : '#38bdf8',
+                          borderRadius: '999px',
+                          padding: '0.16rem 0.55rem',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Buy Scans
+                      </button>
+                    )}
+                  </div>
                 </>
               ) : (
                 <>
@@ -828,15 +857,39 @@ export default function PaperSketchModal({
             {analysisResult?.visionWarning && (
               <div
                 style={{
-                  padding: '0.5rem 0.75rem',
+                  padding: '0.55rem 0.75rem',
                   borderRadius: '8px',
                   background: 'rgba(245, 158, 11, 0.1)',
                   border: '1px solid rgba(245, 158, 11, 0.35)',
                   color: '#fde68a',
                   fontSize: '0.76rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '0.6rem',
+                  flexWrap: 'wrap',
                 }}
               >
-                {analysisResult.visionWarning}
+                <span>{analysisResult.visionWarning}</span>
+                {analysisResult.visionCode === 'QUOTA_EXCEEDED' && onOpenUpgrade && (
+                  <button
+                    type="button"
+                    onClick={onOpenUpgrade}
+                    style={{
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '7px',
+                      padding: '0.3rem 0.68rem',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Buy Scan Pack →
+                  </button>
+                )}
               </div>
             )}
 

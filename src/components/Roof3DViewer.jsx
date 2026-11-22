@@ -808,6 +808,8 @@ export default function Roof3DViewer({
 
     const roofBaseY = wallHeight;
     const isParapetActive = buildingStage === 'parapet' || Boolean(parapetConfig?.enabled);
+    const pProj = Math.max(0.25, Number(parapetConfig?.projection) || 0.45);
+    const corniceH = Math.min(0.55, Math.max(0.32, Number(parapetConfig?.height) || 0.42));
 
     /**
      * Renders 3D Water Collector (WC) elements on the building:
@@ -815,7 +817,13 @@ export default function Roof3DViewer({
      * - Corner angle miter collars (45° amber, 90° cyan, 135° emerald)
      * - Collector funnels, vertical downspouts, offset elbows, and discharge shoes
      */
-    const renderWaterCollector3D = (baseY = roofBaseY, rectWallL = L, rectWallB = B, isPolyShape = false) => {
+    const renderWaterCollector3D = (
+      baseY = roofBaseY,
+      rectWallL = L,
+      rectWallB = B,
+      isPolyShape = false,
+      getEaveToWallGap = null
+    ) => {
       if (!isWcActive) return;
       const wcAnalysis = analyzeWaterCollectorDesign(geometry, roofType, geometry?.polygonVertices, wcConfig);
 
@@ -878,22 +886,40 @@ export default function Roof3DViewer({
       });
 
       // Downspout Drop Pipes + Funnels + Offset Elbows + Discharge Shoes
+      // Always keep vertical pipes & elbows cleanly outside the wall face (even when overhang = 0 on Woodwork/Parapet).
+      const wallClearance = 0.095;
+      const lowerElbowDropY = isParapetActive ? Math.max(0.56, corniceH + 0.14) : 0.55;
+
       wcAnalysis.dropPositions.forEach((drop) => {
         const nx = drop.nx || 0;
         const nz = drop.nz || 0;
-        const eaveInDist = 0.42;
+        const rawGap =
+          typeof getEaveToWallGap === 'function' ? Number(getEaveToWallGap(drop)) : 0.45;
+        const eaveToWallGap = Number.isFinite(rawGap) ? Math.max(0, rawGap) : 0;
+
+        // Gutter collector outlet stands just outside the eave/gutter lip if overhang is flush with the wall
+        const outletPushOut = eaveToWallGap < wallClearance ? wallClearance - eaveToWallGap : 0.02;
+        const startX = drop.x + nx * outletPushOut;
+        const startZ = drop.z + nz * outletPushOut;
+
+        // Horizontal distance from gutter outlet back toward the exterior wall face (never pushes inside the wall!)
+        const jogInDist = Math.max(0, eaveToWallGap + outletPushOut - wallClearance);
 
         // Collector Funnel Outlet beneath gutter
         const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.065, 0.16, 10), elbowMat);
-        funnel.position.set(drop.x, baseY - 0.09, drop.z);
+        funnel.position.set(startX, baseY - 0.09, startZ);
         modelGroup.add(funnel);
 
-        const pElbow1 = new THREE.Vector3(drop.x, baseY - 0.2, drop.z);
-        const pElbow2 = new THREE.Vector3(drop.x - nx * eaveInDist, baseY - 0.55, drop.z - nz * eaveInDist);
+        const pElbow1 = new THREE.Vector3(startX, baseY - 0.2, startZ);
+        const pElbow2 = new THREE.Vector3(
+          startX - nx * jogInDist,
+          baseY - lowerElbowDropY,
+          startZ - nz * jogInDist
+        );
         const pGround = new THREE.Vector3(pElbow2.x, 0.22, pElbow2.z);
         const pShoe = new THREE.Vector3(pGround.x + nx * 0.28, 0.12, pGround.z + nz * 0.28);
 
-        addPipeSegment(new THREE.Vector3(drop.x, baseY - 0.08, drop.z), pElbow1, 0.065, pipeMat);
+        addPipeSegment(new THREE.Vector3(startX, baseY - 0.08, startZ), pElbow1, 0.065, pipeMat);
         addElbowHub(pElbow1);
         addPipeSegment(pElbow1, pElbow2, 0.065, pipeMat);
         addElbowHub(pElbow2);
@@ -902,8 +928,6 @@ export default function Roof3DViewer({
         addPipeSegment(pGround, pShoe, 0.068, elbowMat);
       });
     };
-    const pProj = Math.max(0.25, Number(parapetConfig?.projection) || 0.45);
-    const corniceH = Math.min(0.55, Math.max(0.32, Number(parapetConfig?.height) || 0.42));
 
     /**
      * Renders a 3-tier stepped cast concrete parapet cornice projecting OUTWARD
@@ -1165,139 +1189,254 @@ export default function Roof3DViewer({
 
       // 4. Structural Timber Framing (ONLY when isTimberActive is TRUE!)
       if (isTimberActive) {
-        // Wall Plates atop masonry walls
-        for (let i = 0; i < n; i++) {
+        const kingpostTimberMat = new THREE.MeshStandardMaterial({
+          color: 0xf59e0b, // Warm golden cedar for kingposts, struts & main ridge
+          roughness: 0.65,
+          metalness: 0.08,
+        });
+        const tieBeamTimberMat = new THREE.MeshStandardMaterial({
+          color: 0xd97706, // Rich amber structural tie beams (ceiling joists)
+          roughness: 0.72,
+          metalness: 0.06,
+        });
+
+        const plateY = actualWallH + 0.025;
+        const wallLoopXZ = polyInnerWallPts.map((p) => ({ x: p.x - cX, z: p.y - cZ }));
+
+        // 4a. Wall Plates seated squarely atop load-bearing masonry walls
+        for (let i = 0; i < wallLoopXZ.length; i++) {
+          const a = wallLoopXZ[i];
+          const b = wallLoopXZ[(i + 1) % wallLoopXZ.length];
           addTimberBeam(
-            new THREE.Vector3(pts[i].x - cX, wallHeight + 0.025, pts[i].y - cZ),
-            new THREE.Vector3(pts[(i + 1) % n].x - cX, wallHeight + 0.025, pts[(i + 1) % n].y - cZ),
-            0.09, 0.05, rafterTimberMat
+            new THREE.Vector3(a.x, plateY, a.z),
+            new THREE.Vector3(b.x, plateY, b.z),
+            0.1,
+            0.055,
+            rafterTimberMat
           );
         }
 
-        // Timber Ridge Beams
+        // 4b. Timber Ridge Beams, Hip Rafters & Valley Rafters
         polySkeleton?.ridges?.forEach((r) => {
           const p1 = new THREE.Vector3(r.p1.x - cX, polyRoofBaseY + (r.p1.z || 0) - 0.02, r.p1.y - cZ);
           const p2 = new THREE.Vector3(r.p2.x - cX, polyRoofBaseY + (r.p2.z || 0) - 0.02, r.p2.y - cZ);
-          addTimberBeam(p1, p2, 0.08, 0.16, rafterTimberMat);
+          addTimberBeam(p1, p2, 0.08, 0.16, kingpostTimberMat);
         });
 
-        // Timber Hip Rafters
         polySkeleton?.hips?.forEach((h) => {
           const p1 = new THREE.Vector3(h.p1.x - cX, polyRoofBaseY + (h.p1.z || 0) - 0.02, h.p1.y - cZ);
           const p2 = new THREE.Vector3(h.p2.x - cX, polyRoofBaseY + (h.p2.z || 0) - 0.02, h.p2.y - cZ);
-          addTimberBeam(p1, p2, 0.055, 0.11, rafterTimberMat);
+          addTimberBeam(p1, p2, 0.06, 0.12, rafterTimberMat);
         });
 
-        // Timber Valley Rafters
         polySkeleton?.valleys?.forEach((v) => {
           const p1 = new THREE.Vector3(v.p1.x - cX, polyRoofBaseY + (v.p1.z || 0) - 0.02, v.p1.y - cZ);
           const p2 = new THREE.Vector3(v.p2.x - cX, polyRoofBaseY + (v.p2.z || 0) - 0.02, v.p2.y - cZ);
           addTimberBeam(p1, p2, 0.075, 0.14, rafterTimberMat);
         });
 
-        // Vertical Kingposts under each wing's ridge
-        polySkeleton?.sections?.forEach((sec) => {
-          if (sec.ridge) {
-            const midX = (sec.ridge.p1.x + sec.ridge.p2.x) / 2 - cX;
-            const midZ = (sec.ridge.p1.y + sec.ridge.p2.y) / 2 - cZ;
-            const kpH = sec.kingpostHeight;
-            addTimberBeam(
-              new THREE.Vector3(midX, wallHeight + 0.04, midZ),
-              new THREE.Vector3(midX, polyRoofBaseY + kpH - 0.05, midZ),
-              0.08,
-              0.08,
-              rafterTimberMat
-            );
+        // Helper: cast a horizontal 2D ray from (ox, oz) along unit (dx, dz) to nearest wall polygon edge
+        const castRayToWallLoop = (ox, oz, dx, dz, loop) => {
+          let bestT = Infinity;
+          const m = loop.length;
+          for (let i = 0; i < m; i++) {
+            const a = loop[i];
+            const b = loop[(i + 1) % m];
+            const ex = b.x - a.x;
+            const ez = b.z - a.z;
+            const denom = dx * ez - dz * ex;
+            if (Math.abs(denom) < 1e-6) continue;
+            const qx = a.x - ox;
+            const qz = a.z - oz;
+            const t = (qx * ez - qz * ex) / denom;
+            const s = (qx * dz - qz * dx) / denom;
+            if (t > 0.08 && s >= -1e-3 && s <= 1 + 1e-3 && t < bestT) {
+              bestT = t;
+            }
           }
+          return Number.isFinite(bestT) ? bestT : null;
+        };
+
+        // 4c. Real Kingpost Trusses: Horizontal Tie Beams + Vertical Kingposts + Diagonal Web Struts
+        const trussSpacing = Math.max(0.8, Math.min(2.0, Number(woodworkConfig?.trussSpacing) || 1.2));
+        const tieY = plateY + 0.065;
+        const trussRidges =
+          polySkeleton?.ridges?.length > 0
+            ? polySkeleton.ridges
+            : (polySkeleton?.sections || []).filter((s) => s.ridge).map((s) => s.ridge);
+
+        trussRidges.forEach((r) => {
+          const r1 = new THREE.Vector3(r.p1.x - cX, polyRoofBaseY + (r.p1.z || 0), r.p1.y - cZ);
+          const r2 = new THREE.Vector3(r.p2.x - cX, polyRoofBaseY + (r.p2.z || 0), r.p2.y - cZ);
+          const rdx = r2.x - r1.x;
+          const rdz = r2.z - r1.z;
+          const rLen = Math.hypot(rdx, rdz);
+
+          const perpX = rLen > 0.05 ? -rdz / rLen : 1;
+          const perpZ = rLen > 0.05 ? rdx / rLen : 0;
+
+          const nBays = rLen > 0.35 ? Math.max(1, Math.round(rLen / trussSpacing)) : 0;
+          const tStations = nBays === 0 ? [0.5] : Array.from({ length: nBays + 1 }, (_, idx) => idx / nBays);
+
+          tStations.forEach((t) => {
+            const rx = r1.x + rdx * t;
+            const ry = r1.y + (r2.y - r1.y) * t;
+            const rz = r1.z + rdz * t;
+            if (ry <= tieY + 0.15) return;
+
+            const dPos = castRayToWallLoop(rx, rz, perpX, perpZ, wallLoopXZ);
+            const dNeg = castRayToWallLoop(rx, rz, -perpX, -perpZ, wallLoopXZ);
+            if (!dPos || !dNeg) return;
+
+            const wPos = new THREE.Vector3(rx + perpX * dPos, tieY, rz + perpZ * dPos);
+            const wNeg = new THREE.Vector3(rx - perpX * dNeg, tieY, rz - perpZ * dNeg);
+            const kpFoot = new THREE.Vector3(rx, tieY, rz);
+            const kpTop = new THREE.Vector3(rx, ry - 0.04, rz);
+
+            // Horizontal 2x6 Tie Beam spanning wall plate to wall plate
+            addTimberBeam(wNeg, wPos, 0.06, 0.13, tieBeamTimberMat);
+
+            // Vertical Kingpost seated directly on the tie beam up to the ridge
+            addTimberBeam(kpFoot, kpTop, 0.085, 0.085, kingpostTimberMat);
+
+            // Diagonal Web Struts bracing from kingpost foot up to mid-rafters on both slopes
+            const kpRise = ry - tieY;
+            if (kpRise > 0.45) {
+              const strutStart = new THREE.Vector3(rx, tieY + 0.05, rz);
+              const targetPos = new THREE.Vector3(
+                rx + perpX * (dPos * 0.5),
+                tieY + kpRise * 0.5,
+                rz + perpZ * (dPos * 0.5)
+              );
+              const targetNeg = new THREE.Vector3(
+                rx - perpX * (dNeg * 0.5),
+                tieY + kpRise * 0.5,
+                rz - perpZ * (dNeg * 0.5)
+              );
+              addTimberBeam(strutStart, targetPos, 0.048, 0.075, kingpostTimberMat);
+              addTimberBeam(strutStart, targetNeg, 0.048, 0.075, kingpostTimberMat);
+            }
+          });
         });
 
-        // Common intermediate rafters & purlins across facets
+        // Helper: intersect a 3D triangle with a scalar plane (e.g. world-aligned rafter grid or horizontal purlin elevation)
+        const sliceTriangleByScalar = (verts, scalars, target) => {
+          const hits = [];
+          const eps = 1e-5;
+          for (let i = 0; i < 3; i++) {
+            const j = (i + 1) % 3;
+            const a = verts[i];
+            const b = verts[j];
+            const sa = scalars[i] - target;
+            const sb = scalars[j] - target;
+            if (Math.abs(sa) <= eps && Math.abs(sb) <= eps) {
+              hits.push(a.clone(), b.clone());
+            } else if (Math.abs(sa) <= eps) {
+              hits.push(a.clone());
+            } else if ((sa < 0 && sb > 0) || (sa > 0 && sb < 0)) {
+              const frac = sa / (sa - sb);
+              hits.push(new THREE.Vector3().lerpVectors(a, b, frac));
+            }
+          }
+          const unique = [];
+          for (const pt of hits) {
+            if (!unique.some((u) => u.distanceToSquared(pt) < 1e-5)) {
+              unique.push(pt);
+            }
+          }
+          if (unique.length < 2) return null;
+          if (unique.length === 2) return [unique[0], unique[1]];
+          let bestA = unique[0];
+          let bestB = unique[1];
+          let bestD = bestA.distanceToSquared(bestB);
+          for (let i = 0; i < unique.length; i++) {
+            for (let j = i + 1; j < unique.length; j++) {
+              const d = unique[i].distanceToSquared(unique[j]);
+              if (d > bestD) {
+                bestD = d;
+                bestA = unique[i];
+                bestB = unique[j];
+              }
+            }
+          }
+          return [bestA, bestB];
+        };
+
+        // 4d. True Parallel Common & Jack Rafters + Dead-Level Continuous Purlins
+        const rafterSpacing = Math.max(0.65, Math.min(1.5, Number(woodworkConfig?.trussSpacing) || 1.0));
+        const purlinSpacing = Math.max(0.35, Math.min(1.2, Number(woodworkConfig?.purlinSpacing) || 0.6));
+        const pitchRad = ((geometry?.pitchDegrees || 35) * Math.PI) / 180;
+        const purlinStepY = Math.max(0.18, purlinSpacing * Math.max(0.2, Math.sin(pitchRad)));
+        const firstPurlinY = polyRoofBaseY + purlinStepY * 0.35;
+
         polySkeleton?.triangles?.forEach((tri) => {
           const v0 = new THREE.Vector3(tri[0].x - cX, polyRoofBaseY + (tri[0].z || 0), tri[0].y - cZ);
           const v1 = new THREE.Vector3(tri[1].x - cX, polyRoofBaseY + (tri[1].z || 0), tri[1].y - cZ);
           const v2 = new THREE.Vector3(tri[2].x - cX, polyRoofBaseY + (tri[2].z || 0), tri[2].y - cZ);
+          const verts = [v0, v1, v2];
 
           const nFacet = getOutwardRoofNormal(v0, v1, v2);
           const rafterShift = nFacet.clone().multiplyScalar(-0.075);
-          const purlinShift = nFacet.clone().multiplyScalar(-0.025);
+          const purlinShift = nFacet.clone().multiplyScalar(-0.022);
 
-          // Sort vertices by elevation so rafters always run strictly along the slope (from lower to higher)
-          const sorted = [v0, v1, v2].sort((a, b) => a.y - b.y);
-          const pLow1 = sorted[0];
-          const pMid = sorted[1];
-          const pHigh = sorted[2];
+          // Parallel Rafters: slice triangle perpendicular to the eave on a canonical global grid
+          const horizLen = Math.hypot(nFacet.x, nFacet.z);
+          if (horizLen > 1e-4) {
+            const eaveDir = new THREE.Vector3(-nFacet.z / horizLen, 0, nFacet.x / horizLen);
+            if (eaveDir.x < -1e-4 || (Math.abs(eaveDir.x) <= 1e-4 && eaveDir.z < 0)) {
+              eaveDir.negate();
+            }
+            const uVals = [v0.dot(eaveDir), v1.dot(eaveDir), v2.dot(eaveDir)];
+            const uMin = Math.min(uVals[0], uVals[1], uVals[2]);
+            const uMax = Math.max(uVals[0], uVals[1], uVals[2]);
 
-          // Check if facet has 2 lower vertices (eaves base) or 2 higher vertices (ridge base)
-          const dY_low = Math.abs(pMid.y - pLow1.y);
-          const dY_high = Math.abs(pHigh.y - pMid.y);
-
-          if (dY_low <= dY_high) {
-            // 2 lower vertices (pLow1, pMid) form the eaves base; pHigh is the apex
-            const baseA = pLow1;
-            const baseB = pMid;
-            const apex = pHigh;
-            const bLen = baseA.distanceTo(baseB);
-
-            if (bLen > 0.5) {
-              const nRafters = Math.max(1, Math.round(bLen / 0.8));
-              for (let r = 1; r < nRafters; r++) {
-                const s = r / nRafters;
-                const basePt = new THREE.Vector3().lerpVectors(baseA, baseB, s);
+            const kStart = Math.ceil((uMin + 0.08) / rafterSpacing);
+            const kEnd = Math.floor((uMax - 0.08) / rafterSpacing);
+            for (let k = kStart; k <= kEnd; k++) {
+              const seg = sliceTriangleByScalar(verts, uVals, k * rafterSpacing);
+              if (seg && seg[0].distanceTo(seg[1]) > 0.12) {
                 addTimberBeam(
-                  apex.clone().lerp(basePt, 0.08).add(rafterShift),
-                  apex.clone().lerp(basePt, 0.96).add(rafterShift),
-                  0.045,
-                  0.075,
+                  seg[0].clone().add(rafterShift),
+                  seg[1].clone().add(rafterShift),
+                  0.048,
+                  0.085,
                   rafterTimberMat,
                   nFacet
                 );
-              }
-              const midBase = new THREE.Vector3().addVectors(baseA, baseB).multiplyScalar(0.5);
-              const slopeLen = midBase.distanceTo(apex);
-              const nPurlins = Math.max(1, Math.round(slopeLen / 0.65));
-              for (let pr = 1; pr <= nPurlins; pr++) {
-                const t = (pr - 0.3) / nPurlins;
-                const q0 = new THREE.Vector3().lerpVectors(apex, baseA, t).add(purlinShift);
-                const q1 = new THREE.Vector3().lerpVectors(apex, baseB, t).add(purlinShift);
-                addTimberBeam(q0, q1, 0.05, 0.035, purlinTimberMat, nFacet);
               }
             }
-          } else {
-            // 2 higher vertices (pMid, pHigh) along ridge/transition; pLow1 is the base apex
-            const topA = pMid;
-            const topB = pHigh;
-            const base = pLow1;
-            const tLen = topA.distanceTo(topB);
+          }
 
-            if (tLen > 0.5) {
-              const nRafters = Math.max(1, Math.round(tLen / 0.8));
-              for (let r = 1; r < nRafters; r++) {
-                const s = r / nRafters;
-                const topPt = new THREE.Vector3().lerpVectors(topA, topB, s);
-                addTimberBeam(
-                  topPt.clone().lerp(base, 0.08).add(rafterShift),
-                  topPt.clone().lerp(base, 0.96).add(rafterShift),
-                  0.045,
-                  0.075,
-                  rafterTimberMat,
-                  nFacet
-                );
-              }
-              const midTop = new THREE.Vector3().addVectors(topA, topB).multiplyScalar(0.5);
-              const slopeLen = midTop.distanceTo(base);
-              const nPurlins = Math.max(1, Math.round(slopeLen / 0.65));
-              for (let pr = 1; pr <= nPurlins; pr++) {
-                const t = (pr - 0.3) / nPurlins;
-                const q0 = new THREE.Vector3().lerpVectors(base, topA, t).add(purlinShift);
-                const q1 = new THREE.Vector3().lerpVectors(base, topB, t).add(purlinShift);
-                addTimberBeam(q0, q1, 0.05, 0.035, purlinTimberMat, nFacet);
-              }
+          // Dead-Level Purlins: slice triangle on shared global horizontal elevation planes
+          const yVals = [v0.y, v1.y, v2.y];
+          const yMin = Math.min(yVals[0], yVals[1], yVals[2]);
+          const yMax = Math.max(yVals[0], yVals[1], yVals[2]);
+          const pStart = Math.max(0, Math.ceil((yMin + 0.05 - firstPurlinY) / purlinStepY));
+          const pEnd = Math.floor((yMax - 0.06 - firstPurlinY) / purlinStepY);
+
+          for (let pk = pStart; pk <= pEnd; pk++) {
+            const targetY = firstPurlinY + pk * purlinStepY;
+            const seg = sliceTriangleByScalar(verts, yVals, targetY);
+            if (seg && seg[0].distanceTo(seg[1]) > 0.1) {
+              addTimberBeam(
+                seg[0].clone().add(purlinShift),
+                seg[1].clone().add(purlinShift),
+                0.048,
+                0.036,
+                purlinTimberMat,
+                nFacet
+              );
             }
           }
         });
       }
 
-      renderWaterCollector3D(polyRoofBaseY, L, B, true);
+      const polyWallInset =
+        isParapetActive && parapetConfig?.includedInSketch && polyInnerWallPts !== pts
+          ? Math.min(pProj, 0.45)
+          : 0;
+      const polyEaveToWallGap = Math.max(0, avgOvVal) + polyWallInset;
+      renderWaterCollector3D(polyRoofBaseY, L, B, true, () => polyEaveToWallGap);
 
       return; // Early return for custom polygon
     }
@@ -2264,7 +2403,13 @@ export default function Roof3DViewer({
       });
     }
 
-    renderWaterCollector3D(roofBaseY, rectWallL, rectWallB, false);
+    renderWaterCollector3D(roofBaseY, rectWallL, rectWallB, false, (drop) => {
+      const nx = drop?.nx || 0;
+      const nz = drop?.nz || 0;
+      const sideOv =
+        nx < -0.5 ? ov.left : nx > 0.5 ? ov.right : nz > 0.5 ? ov.front : ov.back;
+      return Math.max(0, sideOv) + rectInset;
+    });
 
   }, [geometry, roofType, selectedMaterial, extensions, buildingStage, parapetConfig, woodworkConfig, effectiveDisplayMode, wcConfig]);
 
@@ -2347,51 +2492,8 @@ export default function Roof3DViewer({
       {/* Canvas Mount */}
       <div ref={mountRef} style={{ width: '100%', height: '100%', cursor: 'grab', touchAction: 'none' }} />
 
-      {/* Bottom Legend */}
-      <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', pointerEvents: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(8px)', padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(71, 85, 105, 0.6)', fontSize: '11px', color: '#94a3b8', pointerEvents: 'auto' }}>
-          {wcConfig?.enabled ? (
-            <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#0ea5e9', display: 'inline-block' }}></span> WC Pipes ({wcConfig.floors || 1}F)
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f8fafc', display: 'inline-block' }}></span> 2 Elbows/Drop
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#22d3ee', display: 'inline-block' }}></span> 45°/90°/135° Corners
-              </span>
-            </>
-          ) : effectiveDisplayMode === 'finished' ? (
-            <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: activeVisual.swatch, display: 'inline-block' }}></span> {activeVisual.label}
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#' + activeVisual.ridgeHex.toString(16).padStart(6, '0'), display: 'inline-block' }}></span> Ridge Caps
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#38bdf8', display: 'inline-block' }}></span> Gutters
-              </span>
-            </>
-          ) : (
-            <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#f59e0b', display: 'inline-block' }}></span> Kingposts & Ridge
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#b45309', display: 'inline-block' }}></span> Rafters & Trusses
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#e09f3e', display: 'inline-block' }}></span> Purlins
-              </span>
-            </>
-          )}
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#475569', display: 'inline-block' }}></span> Walls
-          </span>
-        </div>
-
+      {/* Bottom Pitch Indicator */}
+      <div style={{ position: 'absolute', bottom: '12px', right: '12px', zIndex: 10, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
         <div style={{ background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(8px)', padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(71, 85, 105, 0.6)', fontSize: '11px', color: '#e2e8f0', pointerEvents: 'auto' }}>
           Pitch: <span style={{ fontWeight: 700, color: '#34d399' }}>{geometry?.pitchDegrees || 0}°</span>
         </div>

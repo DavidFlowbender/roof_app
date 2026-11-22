@@ -1,13 +1,15 @@
 import {
   getSupabaseConfig,
   verifySupabaseSessionUser,
-  activateProForUser,
 } from './_supabase.js';
+import { fulfillVerifiedPaystackTransaction } from './_billing.js';
 
 /**
  * POST /api/verify-payment
  * Verifies a Paystack transaction reference immediately when the user returns from checkout
- * and activates Pro in Supabase right away (while paystack-webhook handles background/recurring events).
+ * and fulfills either:
+ *   - Pro upgrade (with optional referral discount & Option A commission tracking)
+ *   - On-demand AI Scan Top-Up pack (+50 / +100 / +250 credits)
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -67,25 +69,26 @@ export default async function handler(req, res) {
       });
     }
 
-    const minAmount = Math.max(100, Number(process.env.PAYSTACK_PRO_AMOUNT_KOBO || 500000));
-    if (Number(tx.amount || 0) < minAmount) {
-      return res.status(400).json({
+    const result = await fulfillVerifiedPaystackTransaction(supabaseUrl, supabaseServiceKey, tx, {
+      fallbackUserId: user.id,
+      fallbackEmail: user.email,
+    });
+
+    if (!result.ok) {
+      return res.status(result.status || 500).json({
         verified: false,
-        error: 'Transaction amount does not match the Pro plan price.',
+        error: result.error || 'Could not finalize purchase.',
       });
     }
 
-    const ok = await activateProForUser(supabaseUrl, supabaseServiceKey, {
-      userId: user.id,
-      email: user.email,
-      customerCode: tx?.customer?.customer_code || null,
+    return res.status(200).json({
+      verified: true,
+      isPro: Boolean(result.isPro),
+      purchaseType: result.purchaseType,
+      scansAdded: result.scansAdded || 0,
+      quota: result.quota || null,
+      referralCode: result.referralCode || null,
     });
-
-    if (!ok) {
-      return res.status(500).json({ verified: false, error: 'Could not update Pro status.' });
-    }
-
-    return res.status(200).json({ verified: true, isPro: true });
   } catch (err) {
     return res.status(502).json({
       verified: false,

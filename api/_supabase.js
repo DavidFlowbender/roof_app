@@ -56,12 +56,31 @@ export async function verifySupabaseSessionUser(authHeader, supabaseUrl, service
   return { ok: true, user, userToken };
 }
 
+export async function getSupabaseProfile(supabaseUrl, serviceKey, { userId = null, email = null }) {
+  const filter = userId
+    ? `id=eq.${encodeURIComponent(userId)}`
+    : email
+      ? `email=eq.${encodeURIComponent(String(email).toLowerCase())}`
+      : null;
+  if (!filter) return null;
+
+  const resp = await fetch(
+    `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code`,
+    { headers: getSupabaseAdminHeaders(serviceKey) }
+  );
+  if (!resp.ok) return null;
+  const rows = await resp.json().catch(() => []);
+  return rows?.[0] || null;
+}
+
 export async function activateProForUser(
   supabaseUrl,
   serviceKey,
-  { userId = null, email = null, customerCode = null, days = 32 }
+  { userId = null, email = null, customerCode = null, referredByCode = null, days = 32 }
 ) {
   const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  const existing = await getSupabaseProfile(supabaseUrl, serviceKey, { userId, email });
+  const keepReferral = existing?.referred_by_code || referredByCode || null;
 
   if (userId) {
     const resp = await fetch(`${supabaseUrl}/rest/v1/profiles?on_conflict=id`, {
@@ -73,6 +92,7 @@ export async function activateProForUser(
         is_pro: true,
         plan_expires_at: expires,
         ...(customerCode ? { paystack_customer_code: customerCode } : {}),
+        ...(keepReferral ? { referred_by_code: keepReferral } : {}),
       }),
     });
     return resp.ok;
@@ -88,6 +108,7 @@ export async function activateProForUser(
           is_pro: true,
           plan_expires_at: expires,
           ...(customerCode ? { paystack_customer_code: customerCode } : {}),
+          ...(keepReferral ? { referred_by_code: keepReferral } : {}),
         }),
       }
     );
@@ -95,4 +116,51 @@ export async function activateProForUser(
   }
 
   return false;
+}
+
+export async function addScanCreditsForUser(
+  supabaseUrl,
+  serviceKey,
+  { userId = null, email = null, scansToAdd = 0, customerCode = null }
+) {
+  const addCount = Math.max(0, Math.round(Number(scansToAdd) || 0));
+  if (!addCount) return { ok: false, quota: null };
+
+  const existing = await getSupabaseProfile(supabaseUrl, serviceKey, { userId, email });
+  const defaultInitial = Math.max(1, Number(process.env.PRO_INITIAL_AI_SCANS || process.env.PRO_MONTHLY_AI_SCANS || 100));
+  const currentLimit = Number(existing?.ai_scans_limit) > 0 ? Number(existing.ai_scans_limit) : defaultInitial;
+  const currentUsed = Number(existing?.ai_scans_used) || 0;
+  const nextLimit = currentLimit + addCount;
+
+  const filter = existing?.id
+    ? `id=eq.${encodeURIComponent(existing.id)}`
+    : userId
+      ? `id=eq.${encodeURIComponent(userId)}`
+      : email
+        ? `email=eq.${encodeURIComponent(String(email).toLowerCase())}`
+        : null;
+
+  if (!filter) return { ok: false, quota: null };
+
+  const resp = await fetch(`${supabaseUrl}/rest/v1/profiles?${filter}`, {
+    method: 'PATCH',
+    headers: getSupabaseAdminHeaders(serviceKey),
+    body: JSON.stringify({
+      ai_scans_limit: nextLimit,
+      ...(customerCode ? { paystack_customer_code: customerCode } : {}),
+    }),
+  });
+
+  if (!resp.ok) {
+    return { ok: false, quota: null };
+  }
+
+  return {
+    ok: true,
+    quota: {
+      used: currentUsed,
+      limit: nextLimit,
+      remaining: Math.max(0, nextLimit - currentUsed),
+    },
+  };
 }
