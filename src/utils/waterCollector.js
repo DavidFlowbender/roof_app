@@ -498,9 +498,34 @@ export function estimateWaterCollector(
     },
   ];
 
+  const rawExtraItems = Array.isArray(customPrices?.__extraItems) ? customPrices.__extraItems : [];
+  const customWcItems = rawExtraItems
+    .filter((ci) => ci && ci.scope === 'wc' && String(ci.name || '').trim())
+    .map((ci) => {
+      const qty = Math.max(0, Number(ci.quantity) || 0);
+      const overrideVal = customPrices?.[ci.id];
+      const unitPrice =
+        overrideVal !== undefined && overrideVal !== '' && Number.isFinite(Number(overrideVal))
+          ? Math.max(0, Number(overrideVal))
+          : Math.max(0, Number(ci.unitPrice) || 0);
+      return {
+        id: ci.id,
+        category: 'WC Custom',
+        name: String(ci.name).trim(),
+        spec: ci.spec ? String(ci.spec) : 'Custom added WC material',
+        quantity: qty,
+        unit: String(ci.unit || 'pcs').trim() || 'pcs',
+        unitPrice,
+        total: qty * unitPrice,
+        isCustom: true,
+        scope: 'wc',
+      };
+    });
+
+  const combinedItems = [...rawItems, ...customWcItems];
   const items = includeZeroItems
-    ? rawItems
-    : rawItems.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);
+    ? combinedItems
+    : combinedItems.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);
 
   const materialsSubtotal = items.reduce((acc, it) => acc + it.total, 0);
   const laborUnits = Math.ceil(analysis.activeGutterM + analysis.totalDropM);

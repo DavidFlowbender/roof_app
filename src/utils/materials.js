@@ -478,10 +478,61 @@ export function estimateMaterials(
     }
   }
 
+  // User-added custom material rows (stored in customPrices.__extraItems, auto-persisted in localStorage)
+  const rawExtraItems = Array.isArray(customPrices?.__extraItems) ? customPrices.__extraItems : [];
+  const customRoofItems = rawExtraItems
+    .filter((ci) => ci && (ci.scope || 'roof') === 'roof' && String(ci.name || '').trim())
+    .map((ci) => {
+      const qty = Math.max(0, Number(ci.quantity) || 0);
+      const overrideVal = customPrices?.[ci.id];
+      const unitPrice =
+        overrideVal !== undefined && overrideVal !== '' && Number.isFinite(Number(overrideVal))
+          ? Math.max(0, Number(overrideVal))
+          : Math.max(0, Number(ci.unitPrice) || 0);
+      return {
+        id: ci.id,
+        category: 'Custom Material',
+        name: String(ci.name).trim(),
+        spec: ci.spec ? String(ci.spec) : 'Custom added material',
+        quantity: qty,
+        unit: String(ci.unit || 'pcs').trim() || 'pcs',
+        unitPrice,
+        total: qty * unitPrice,
+        isCustom: true,
+        scope: 'roof',
+      };
+    });
+
+  const customWoodItems =
+    buildingStage === 'woodwork' || woodworkConfig?.includeTimberBOQ || includeZeroItems
+      ? rawExtraItems
+          .filter((ci) => ci && ci.scope === 'wood' && String(ci.name || '').trim())
+          .map((ci) => {
+            const qty = Math.max(0, Number(ci.quantity) || 0);
+            const overrideVal = customPrices?.[ci.id];
+            const unitPrice =
+              overrideVal !== undefined && overrideVal !== '' && Number.isFinite(Number(overrideVal))
+                ? Math.max(0, Number(overrideVal))
+                : Math.max(0, Number(ci.unitPrice) || 0);
+            return {
+              id: ci.id,
+              category: 'Timber Custom',
+              name: String(ci.name).trim(),
+              spec: ci.spec ? String(ci.spec) : 'Custom added timber material',
+              quantity: qty,
+              unit: String(ci.unit || 'pcs').trim() || 'pcs',
+              unitPrice,
+              total: qty * unitPrice,
+              isCustom: true,
+              scope: 'wood',
+            };
+          })
+      : [];
+
   // Combine all items & hide any zero-amount or zero-quantity rows from the BOQ
-  const rawItems = [...baseItems, ...parapetItems, ...timberItems];
+  const rawItems = [...baseItems, ...parapetItems, ...customRoofItems, ...timberItems, ...customWoodItems];
   const allItems = includeZeroItems
-    ? rawItems.filter((it) => Number(it.quantity) > 0)
+    ? rawItems.filter((it) => Number(it.quantity) > 0 || it.isCustom)
     : rawItems.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);
 
   // Calculate Materials Subtotal

@@ -21,6 +21,8 @@ import {
   User,
   LogIn,
   LogOut,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { MATERIAL_PROFILES, estimateMaterials, formatCurrency } from '../utils/materials';
 import { estimateWaterCollector } from '../utils/waterCollector';
@@ -56,6 +58,8 @@ export default function MobileWorkspace({
   setSelectedMaterial,
   customPrices,
   setCustomPrices,
+  wastePercentage = 10,
+  setWastePercentage = null,
   buildingStage = 'woodwork',
   handleStageSelect = null,
   parapetConfig = null,
@@ -110,6 +114,55 @@ export default function MobileWorkspace({
       window.removeEventListener('touchstart', onOutside);
     };
   }, [profileMenuOpen]);
+
+  const [newMatName, setNewMatName] = useState('');
+  const [newMatQty, setNewMatQty] = useState('1');
+  const [newMatUnit, setNewMatUnit] = useState('pcs');
+  const [newMatPrice, setNewMatPrice] = useState('');
+
+  const extraItemsList = Array.isArray(customPrices?.__extraItems) ? customPrices.__extraItems : [];
+  const activeExtraItems = extraItemsList.filter((ci) => (ci.scope || 'roof') === priceCategory);
+
+  const handleAddCustomMaterial = (e) => {
+    if (e) e.preventDefault();
+    const cleanName = String(newMatName || '').trim();
+    if (!cleanName) return;
+    const qty = Math.max(1, Number(newMatQty) || 1);
+    const price = Math.max(0, Number(newMatPrice) || 0);
+    const unit = String(newMatUnit || 'pcs').trim() || 'pcs';
+    const nextItem = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      scope: priceCategory,
+      name: cleanName,
+      quantity: qty,
+      unit,
+      unitPrice: price,
+    };
+    setCustomPrices({
+      ...(customPrices || {}),
+      __extraItems: [...extraItemsList, nextItem],
+    });
+    setNewMatName('');
+    setNewMatQty('1');
+    setNewMatPrice('');
+  };
+
+  const handleUpdateCustomMaterial = (id, patch) => {
+    const nextList = extraItemsList.map((ci) => (ci.id === id ? { ...ci, ...patch } : ci));
+    const nextCustom = { ...(customPrices || {}), __extraItems: nextList };
+    if (patch.unitPrice !== undefined) {
+      delete nextCustom[id];
+    }
+    setCustomPrices(nextCustom);
+  };
+
+  const handleDeleteCustomMaterial = (id) => {
+    const nextList = extraItemsList.filter((ci) => ci.id !== id);
+    const nextCustom = { ...(customPrices || {}), __extraItems: nextList };
+    delete nextCustom[id];
+    if (nextList.length === 0) delete nextCustom.__extraItems;
+    setCustomPrices(nextCustom);
+  };
 
   const unitLabel = unitSystem === UNIT_SYSTEMS.METRIC ? 'm' : 'ft';
   const isCustomShape = Boolean(polygonVertices && polygonVertices.length >= 3);
@@ -399,6 +452,85 @@ export default function MobileWorkspace({
           </div>
         ) : (
           <>
+            {isRoofQuote && setWastePercentage && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  padding: '6px 10px',
+                  background: '#111827',
+                  border: '1px solid #1f2937',
+                  borderRadius: '9px',
+                  fontSize: '11.5px',
+                }}
+              >
+                <span style={{ color: '#94a3b8', fontWeight: 600 }}>
+                  Waste Allowance (cuts &amp; valleys):
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setWastePercentage(Math.max(0, (Number(wastePercentage) || 0) - 1))}
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      background: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    className="compact-num-input"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="1"
+                    aria-label="Waste allowance percentage"
+                    value={Number(wastePercentage) || 0}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
+                      setWastePercentage(v);
+                    }}
+                    style={{
+                      width: '40px',
+                      background: '#090e1a',
+                      color: '#34d399',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      textAlign: 'center',
+                    }}
+                  />
+                  <span style={{ color: '#34d399', fontWeight: 700 }}>%</span>
+                  <button
+                    type="button"
+                    onClick={() => setWastePercentage(Math.min(30, (Number(wastePercentage) || 0) + 1))}
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      background: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Compact Fitted Quote Items */}
             <div
               style={{
@@ -602,7 +734,16 @@ export default function MobileWorkspace({
             >
               <Menu className="w-4 h-4" />
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+            <div
+              onClick={() => setSidebarOpen(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setSidebarOpen(true);
+              }}
+              title="Open menu to switch views"
+              style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer' }}
+            >
               <span
                 style={{
                   width: '24px',
@@ -2099,7 +2240,7 @@ export default function MobileWorkspace({
 
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {priceCategory === 'roof' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: setWastePercentage ? '1fr 1fr 82px' : '1fr 1fr', gap: '6px' }}>
                     <label
                       style={{
                         background: '#111827',
@@ -2119,7 +2260,7 @@ export default function MobileWorkspace({
                         min="0"
                         value={customPrices?.laborPerM2 !== undefined ? customPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
                         onChange={(e) => setCustomPrices({ ...(customPrices || {}), laborPerM2: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
+                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
                       />
                     </label>
                     <label
@@ -2141,9 +2282,39 @@ export default function MobileWorkspace({
                         min="0"
                         value={customPrices?.transport !== undefined ? customPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
                         onChange={(e) => setCustomPrices({ ...(customPrices || {}), transport: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
+                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
                       />
                     </label>
+                    {setWastePercentage && (
+                      <label
+                        style={{
+                          background: '#111827',
+                          border: '1px solid #1f2937',
+                          borderRadius: '9px',
+                          padding: '8px 8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '3px',
+                          fontSize: '11px',
+                          color: '#94a3b8',
+                        }}
+                      >
+                        <span>Waste %</span>
+                        <input
+                          className="compact-num-input"
+                          type="number"
+                          min="0"
+                          max="30"
+                          step="1"
+                          value={Number(wastePercentage) || 0}
+                          onChange={(e) => {
+                            const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
+                            setWastePercentage(v);
+                          }}
+                          style={{ background: '#090e1a', color: '#34d399', border: '1px solid #334155', borderRadius: '6px', padding: '5px 4px', fontSize: '13px', fontWeight: 800, textAlign: 'center', width: '100%' }}
+                        />
+                      </label>
+                    )}
                   </div>
                 )}
 
@@ -2197,9 +2368,10 @@ export default function MobileWorkspace({
                 )}
 
                 {(priceCategory === 'wc'
-                  ? editableWcMaterials?.items || []
+                  ? (editableWcMaterials?.items || []).filter((it) => !it.isCustom)
                   : (editableMaterials?.items || []).filter((it) =>
-                      priceCategory === 'roof' ? !it.category.includes('Timber') : it.category.includes('Timber')
+                      !it.isCustom &&
+                      (priceCategory === 'roof' ? !it.category.includes('Timber') : it.category.includes('Timber'))
                     )
                 ).map((it) => (
                     <div
@@ -2236,6 +2408,219 @@ export default function MobileWorkspace({
                       />
                     </div>
                   ))}
+
+                {/* User-Added Custom Material Rows */}
+                {activeExtraItems.map((ci) => (
+                  <div
+                    key={`custom-row-${ci.id}`}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      background: 'rgba(14, 165, 233, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      borderRadius: '9px',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="text"
+                        value={ci.name}
+                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { name: e.target.value })}
+                        placeholder="Material name"
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: '#090e1a',
+                          color: '#f8fafc',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '5px 8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCustomMaterial(ci.id)}
+                        title="Remove custom material"
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.16)',
+                          color: '#fca5a5',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          borderRadius: '6px',
+                          padding: '5px 7px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '64px 72px 1fr', gap: '6px', alignItems: 'center' }}>
+                      <input
+                        className="compact-num-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={ci.quantity}
+                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { quantity: Number(e.target.value) || 0 })}
+                        placeholder="Qty"
+                        aria-label="Custom material quantity"
+                        style={{
+                          background: '#090e1a',
+                          color: '#38bdf8',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '5px 6px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={ci.unit}
+                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { unit: e.target.value })}
+                        placeholder="pcs"
+                        aria-label="Custom material unit"
+                        style={{
+                          background: '#090e1a',
+                          color: '#cbd5e1',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '5px 6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          textAlign: 'center',
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        value={customPrices?.[ci.id] !== undefined ? customPrices[ci.id] : ci.unitPrice}
+                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { unitPrice: Number(e.target.value) || 0 })}
+                        placeholder="Unit price"
+                        aria-label="Custom material unit price"
+                        style={{
+                          background: '#090e1a',
+                          color: '#34d399',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          padding: '5px 8px',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          textAlign: 'right',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add New Material & Price Row Form */}
+                <form
+                  onSubmit={handleAddCustomMaterial}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    background: '#0d1526',
+                    border: '1px dashed rgba(56, 189, 248, 0.45)',
+                    borderRadius: '10px',
+                    padding: '9px 10px',
+                    marginTop: '2px',
+                  }}
+                >
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Custom Material ({priceCategory === 'wc' ? 'WC' : priceCategory === 'wood' ? 'Wood' : 'Roof'})</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={newMatName}
+                    onChange={(e) => setNewMatName(e.target.value)}
+                    placeholder="Material / item name (e.g. Scaffolding, Fascia Paint)"
+                    style={{
+                      background: '#090e1a',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '56px 66px 1fr auto', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      className="compact-num-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={newMatQty}
+                      onChange={(e) => setNewMatQty(e.target.value)}
+                      placeholder="Qty"
+                      style={{
+                        background: '#090e1a',
+                        color: '#f8fafc',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        padding: '6px 6px',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={newMatUnit}
+                      onChange={(e) => setNewMatUnit(e.target.value)}
+                      placeholder="pcs"
+                      style={{
+                        background: '#090e1a',
+                        color: '#cbd5e1',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        padding: '6px 6px',
+                        fontSize: '12px',
+                        textAlign: 'center',
+                      }}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={newMatPrice}
+                      onChange={(e) => setNewMatPrice(e.target.value)}
+                      placeholder={`Price (${currencyCode})`}
+                      style={{
+                        background: '#090e1a',
+                        color: '#f8fafc',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newMatName.trim()}
+                      style={{
+                        background: newMatName.trim() ? '#10b981' : '#1e293b',
+                        color: newMatName.trim() ? '#052e16' : '#64748b',
+                        border: 'none',
+                        borderRadius: '7px',
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: newMatName.trim() ? 'pointer' : 'not-allowed',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </form>
               </div>
 
               <button
@@ -2270,56 +2655,7 @@ export default function MobileWorkspace({
           )}
         </main>
 
-        {/* 3. PINNED BOTTOM NAVIGATION BAR (52px) */}
-        <nav
-          aria-label="Mobile pages"
-          style={{
-            height: '54px',
-            flexShrink: 0,
-            background: '#111827',
-            borderTop: '1px solid #1f2937',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-          }}
-        >
-          {[
-            { id: '2d', label: '2D Plan', icon: Ruler },
-            { id: 'roof', label: 'Roof', icon: Layers },
-            { id: 'wc', label: 'WC', icon: Droplets, crown: true },
-            { id: 'wood', label: 'Wood', icon: Hammer, crown: true },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activePage === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActivePage(tab.id)}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '2px',
-                  background: 'transparent',
-                  border: 'none',
-                  color: active ? '#38bdf8' : '#94a3b8',
-                  fontSize: '10px',
-                  fontWeight: active ? 800 : 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ position: 'relative', display: 'inline-flex' }}>
-                  <Icon className="w-4 h-4" />
-                  {tab.crown && <Crown className="w-2.5 h-2.5 text-amber-400" style={{ marginLeft: '1px' }} />}
-                </div>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* 4. COLLAPSIBLE LEFT SIDEBAR DRAWER */}
+        {/* 3. COLLAPSIBLE LEFT SIDEBAR DRAWER */}
         {sidebarOpen && (
           <div
             onClick={() => setSidebarOpen(false)}

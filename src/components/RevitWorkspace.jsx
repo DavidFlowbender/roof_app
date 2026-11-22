@@ -20,6 +20,7 @@ import {
   Share2,
   Sliders,
   Smartphone,
+  Trash2,
   User,
   Video,
 } from 'lucide-react';
@@ -111,6 +112,42 @@ export default function RevitWorkspace({
   const [isMobileAppMode, setIsMobileAppMode] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < 768
   );
+  // Inline custom material row composer (Desktop BOQ & WC Quote)
+  const [newRowName, setNewRowName] = useState('');
+  const [newRowQty, setNewRowQty] = useState('1');
+  const [newRowUnit, setNewRowUnit] = useState('pcs');
+  const [newRowPrice, setNewRowPrice] = useState('');
+
+  const handleAddDesktopCustomRow = (scope, e) => {
+    if (e) e.preventDefault();
+    const cleanName = String(newRowName || '').trim();
+    if (!cleanName) return;
+    const extraList = Array.isArray(customPrices?.__extraItems) ? customPrices.__extraItems : [];
+    const nextItem = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      scope,
+      name: cleanName,
+      quantity: Math.max(1, Number(newRowQty) || 1),
+      unit: String(newRowUnit || 'pcs').trim() || 'pcs',
+      unitPrice: Math.max(0, Number(newRowPrice) || 0),
+    };
+    setCustomPrices({
+      ...(customPrices || {}),
+      __extraItems: [...extraList, nextItem],
+    });
+    setNewRowName('');
+    setNewRowQty('1');
+    setNewRowPrice('');
+  };
+
+  const handleDeleteDesktopCustomRow = (id) => {
+    const extraList = Array.isArray(customPrices?.__extraItems) ? customPrices.__extraItems : [];
+    const nextList = extraList.filter((ci) => ci.id !== id);
+    const nextCustom = { ...(customPrices || {}), __extraItems: nextList };
+    delete nextCustom[id];
+    if (nextList.length === 0) delete nextCustom.__extraItems;
+    setCustomPrices(nextCustom);
+  };
 
   useEffect(() => {
     if (!profileMenuOpen) return;
@@ -161,6 +198,7 @@ export default function RevitWorkspace({
         customPrices={customPrices}
         setCustomPrices={setCustomPrices}
         wastePercentage={wastePercentage}
+        setWastePercentage={setWastePercentage}
         buildingStage={buildingStage}
         handleStageSelect={handleStageSelect}
         parapetConfig={parapetConfig}
@@ -1247,6 +1285,34 @@ export default function RevitWorkspace({
                       }}
                     />
                   </label>
+                  {setWastePercentage && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#cbd5e1' }}>
+                      <span>Waste (%):</span>
+                      <input
+                        className="compact-num-input"
+                        type="number"
+                        min="0"
+                        max="30"
+                        step="1"
+                        value={wastePercentage}
+                        onChange={(e) => {
+                          const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
+                          setWastePercentage(v);
+                        }}
+                        style={{
+                          width: '56px',
+                          padding: '4px 6px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          background: '#090e1a',
+                          color: '#34d399',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                        }}
+                      />
+                    </label>
+                  )}
                   <span style={{ fontSize: '11px', color: '#64748b' }}>
                     Set any price to 0 to hide it from the BOQ • Auto-saved
                   </span>
@@ -1346,7 +1412,28 @@ export default function RevitWorkspace({
                           />
                         </td>
                         <td className="boq-price">
-                          {formatCurrency(item.total, currencyCode)}
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{formatCurrency(item.total, currencyCode)}</span>
+                            {item.isCustom && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDesktopCustomRow(item.id)}
+                                title="Remove custom row"
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.14)',
+                                  color: '#fca5a5',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  borderRadius: '5px',
+                                  padding: '3px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1433,6 +1520,71 @@ export default function RevitWorkspace({
                   </tbody>
                 </table>
               </div>
+
+              <form
+                onSubmit={(e) => handleAddDesktopCustomRow(buildingStage === 'woodwork' ? 'wood' : 'roof', e)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  flexWrap: 'wrap',
+                  padding: '8px 10px',
+                  marginBottom: '10px',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  border: '1px dashed rgba(56, 189, 248, 0.4)',
+                  borderRadius: '8px',
+                }}
+              >
+                <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Plus size={14} /> Add Material Row:
+                </span>
+                <input
+                  type="text"
+                  value={newRowName}
+                  onChange={(e) => setNewRowName(e.target.value)}
+                  placeholder="Material / item name"
+                  style={{ flex: '2 1 180px', padding: '5px 8px', fontSize: '12px', background: '#090e1a' }}
+                />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={newRowQty}
+                  onChange={(e) => setNewRowQty(e.target.value)}
+                  placeholder="Qty"
+                  style={{ width: '68px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                />
+                <input
+                  type="text"
+                  value={newRowUnit}
+                  onChange={(e) => setNewRowUnit(e.target.value)}
+                  placeholder="pcs"
+                  style={{ width: '74px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  value={newRowPrice}
+                  onChange={(e) => setNewRowPrice(e.target.value)}
+                  placeholder={`Unit Price (${currencyCode})`}
+                  style={{ width: '125px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'right' }}
+                />
+                <button
+                  type="submit"
+                  disabled={!newRowName.trim()}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    background: newRowName.trim() ? '#10b981' : '#1e293b',
+                    color: newRowName.trim() ? '#052e16' : '#64748b',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: newRowName.trim() ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  + Add Row
+                </button>
+              </form>
 
               <div className="boq-summary-bar">
                 <div className="summary-figures">
@@ -1994,7 +2146,30 @@ export default function RevitWorkspace({
                                 onChange={(e) => setCustomPrices({ ...customPrices, [item.id]: e.target.value })}
                               />
                             </td>
-                            <td className="boq-price">{formatCurrency(item.total, currencyCode)}</td>
+                            <td className="boq-price">
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <span>{formatCurrency(item.total, currencyCode)}</span>
+                                {item.isCustom && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDesktopCustomRow(item.id)}
+                                    title="Remove custom WC row"
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.14)',
+                                      color: '#fca5a5',
+                                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                                      borderRadius: '5px',
+                                      padding: '3px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                         {wcMaterials.summary.laborTotal > 0 && (
@@ -2042,6 +2217,71 @@ export default function RevitWorkspace({
                       </tbody>
                     </table>
                   </div>
+
+                  <form
+                    onSubmit={(e) => handleAddDesktopCustomRow('wc', e)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      padding: '8px 10px',
+                      marginBottom: '10px',
+                      background: 'rgba(15, 23, 42, 0.55)',
+                      border: '1px dashed rgba(56, 189, 248, 0.4)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Plus size={14} /> Add WC Material Row:
+                    </span>
+                    <input
+                      type="text"
+                      value={newRowName}
+                      onChange={(e) => setNewRowName(e.target.value)}
+                      placeholder="WC material / item name"
+                      style={{ flex: '2 1 180px', padding: '5px 8px', fontSize: '12px', background: '#090e1a' }}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={newRowQty}
+                      onChange={(e) => setNewRowQty(e.target.value)}
+                      placeholder="Qty"
+                      style={{ width: '68px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                    />
+                    <input
+                      type="text"
+                      value={newRowUnit}
+                      onChange={(e) => setNewRowUnit(e.target.value)}
+                      placeholder="pcs"
+                      style={{ width: '74px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={newRowPrice}
+                      onChange={(e) => setNewRowPrice(e.target.value)}
+                      placeholder={`Unit Price (${currencyCode})`}
+                      style={{ width: '125px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'right' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newRowName.trim()}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        background: newRowName.trim() ? '#0ea5e9' : '#1e293b',
+                        color: newRowName.trim() ? '#ffffff' : '#64748b',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: newRowName.trim() ? 'pointer' : 'not-allowed',
+                      }}
+                    >
+                      + Add Row
+                    </button>
+                  </form>
 
                   <div className="boq-summary-bar">
                     <div className="summary-figures">

@@ -822,7 +822,8 @@ export default function Roof3DViewer({
       rectWallL = L,
       rectWallB = B,
       isPolyShape = false,
-      getEaveToWallGap = null
+      getEaveToWallGap = null,
+      polyWallData = null
     ) => {
       if (!isWcActive) return;
       const wcAnalysis = analyzeWaterCollectorDesign(geometry, roofType, geometry?.polygonVertices, wcConfig);
@@ -838,10 +839,11 @@ export default function Roof3DViewer({
         metalness: 0.65,
       });
       const bandMat = new THREE.MeshStandardMaterial({
-        color: 0x64748b,
-        roughness: 0.65,
-        metalness: 0.15,
+        color: 0x94a3b8,
+        roughness: 0.52,
+        metalness: 0.18,
       });
+      const bandLineMat = new THREE.LineBasicMaterial({ color: 0xe2e8f0 });
 
       const addPipeSegment = (p1, p2, radius = 0.065, mat = pipeMat) => {
         const dir = new THREE.Vector3().subVectors(p2, p1);
@@ -860,13 +862,59 @@ export default function Roof3DViewer({
         modelGroup.add(sphere);
       };
 
-      // Multi-floor belt slabs on rectangular plans
-      if (!isPolyShape) {
-        for (let f = 1; f < wcFloors; f++) {
-          const beltY = f * 3.0;
-          const belt = new THREE.Mesh(new THREE.BoxGeometry(rectWallL + 0.16, 0.14, rectWallB + 0.16), bandMat);
-          belt.position.set(0, beltY, 0);
-          modelGroup.add(belt);
+      // Multi-floor concrete slab belt + crisp horizontal divider line between every floor (both Rect & Custom Polygons)
+      if (wcFloors > 1) {
+        if (isPolyShape && polyWallData?.wallPts?.length >= 3) {
+          const { wallPts, cX: pCx, cZ: pCz } = polyWallData;
+          const beltLoop = offsetPolygonVertices(wallPts, 0.085);
+          if (beltLoop && beltLoop.length >= 3) {
+            const beltShape = new THREE.Shape();
+            beltShape.moveTo(beltLoop[0].x - pCx, -(beltLoop[0].y - pCz));
+            for (let i = 1; i < beltLoop.length; i++) {
+              beltShape.lineTo(beltLoop[i].x - pCx, -(beltLoop[i].y - pCz));
+            }
+            beltShape.closePath();
+
+            const beltLinePts = beltLoop.map((p) => new THREE.Vector3(p.x - pCx, 0, p.y - pCz));
+
+            for (let f = 1; f < wcFloors; f++) {
+              const beltY = f * 3.0;
+              const beltGeom = new THREE.ExtrudeGeometry(beltShape, { depth: 0.16, bevelEnabled: false });
+              const beltMesh = new THREE.Mesh(beltGeom, bandMat);
+              beltMesh.rotation.x = -Math.PI / 2;
+              beltMesh.position.y = beltY - 0.08;
+              beltMesh.castShadow = true;
+              beltMesh.receiveShadow = true;
+              modelGroup.add(beltMesh);
+
+              // Crisp horizontal divider line along outer slab edge
+              const lineGeom = new THREE.BufferGeometry().setFromPoints(
+                beltLinePts.map((pt) => new THREE.Vector3(pt.x, beltY + 0.005, pt.z))
+              );
+              modelGroup.add(new THREE.LineLoop(lineGeom, bandLineMat));
+            }
+          }
+        } else if (!isPolyShape) {
+          const bw = rectWallL + 0.18;
+          const bd = rectWallB + 0.18;
+          const hw = bw / 2;
+          const hd = bd / 2;
+          for (let f = 1; f < wcFloors; f++) {
+            const beltY = f * 3.0;
+            const belt = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.16, bd), bandMat);
+            belt.position.set(0, beltY, 0);
+            belt.castShadow = true;
+            belt.receiveShadow = true;
+            modelGroup.add(belt);
+
+            const lineGeom = new THREE.BufferGeometry().setFromPoints([
+              new THREE.Vector3(-hw, beltY + 0.005, -hd),
+              new THREE.Vector3(hw, beltY + 0.005, -hd),
+              new THREE.Vector3(hw, beltY + 0.005, hd),
+              new THREE.Vector3(-hw, beltY + 0.005, hd),
+            ]);
+            modelGroup.add(new THREE.LineLoop(lineGeom, bandLineMat));
+          }
         }
       }
 
@@ -1436,7 +1484,11 @@ export default function Roof3DViewer({
           ? Math.min(pProj, 0.45)
           : 0;
       const polyEaveToWallGap = Math.max(0, avgOvVal) + polyWallInset;
-      renderWaterCollector3D(polyRoofBaseY, L, B, true, () => polyEaveToWallGap);
+      renderWaterCollector3D(polyRoofBaseY, L, B, true, () => polyEaveToWallGap, {
+        wallPts: polyInnerWallPts,
+        cX,
+        cZ,
+      });
 
       return; // Early return for custom polygon
     }
