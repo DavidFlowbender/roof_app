@@ -3,6 +3,7 @@ import {
   getSupabaseConfig,
   getSupabaseAdminHeaders,
   verifySupabaseSessionUser,
+  isAdminEmail,
 } from './_supabase.js';
 
 const GEMINI_RESPONSE_SCHEMA = {
@@ -94,6 +95,12 @@ async function verifySupabaseProUser(authHeader, supabaseUrl, serviceKey) {
   }
   const rows = await profResp.json();
   const profile = rows?.[0];
+  const used = Number(profile?.ai_scans_used) || 0;
+
+  // Admin account (sijiteksub@gmail.com) gets full access to all Pro features & unlimited AI scans
+  if (isAdminEmail(user.email)) {
+    return { ok: true, userId: user.id, isAdmin: true, used, limit: 999999 };
+  }
 
   const isExpired = profile?.plan_expires_at && new Date(profile.plan_expires_at) <= new Date();
   if (!profile?.is_pro || isExpired) {
@@ -102,7 +109,6 @@ async function verifySupabaseProUser(authHeader, supabaseUrl, serviceKey) {
 
   const defaultLimit = Number(process.env.PRO_INITIAL_AI_SCANS || process.env.PRO_MONTHLY_AI_SCANS || 100);
   const limit = Number(profile.ai_scans_limit) > 0 ? Number(profile.ai_scans_limit) : defaultLimit;
-  const used = Number(profile.ai_scans_used) || 0;
 
   // Pay-as-you-go AI scan credits: never auto-reset monthly; users buy Scan Top-Up packs at will when finished.
   if (used >= limit) {
@@ -114,7 +120,7 @@ async function verifySupabaseProUser(authHeader, supabaseUrl, serviceKey) {
     };
   }
 
-  return { ok: true, userId: user.id, used, limit };
+  return { ok: true, userId: user.id, isAdmin: false, used, limit };
 }
 
 async function readHashCache(supabaseUrl, serviceKey, imageHash) {
@@ -202,7 +208,8 @@ export default async function handler(req, res) {
         quota: {
           used: authCheck.used,
           limit: authCheck.limit,
-          remaining: Math.max(0, authCheck.limit - authCheck.used),
+          remaining: authCheck.isAdmin ? 999999 : Math.max(0, authCheck.limit - authCheck.used),
+          unlimited: Boolean(authCheck.isAdmin),
         },
       });
     }
@@ -301,7 +308,8 @@ Rules:
         quota: {
           used: nextUsed,
           limit: authCheck.limit,
-          remaining: Math.max(0, authCheck.limit - nextUsed),
+          remaining: authCheck.isAdmin ? 999999 : Math.max(0, authCheck.limit - nextUsed),
+          unlimited: Boolean(authCheck.isAdmin),
         },
       });
     } catch (err) {

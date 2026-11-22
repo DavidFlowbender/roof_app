@@ -78,6 +78,7 @@ export default function MobileWorkspace({
   handleCopyWcSummary,
   isPremium: externalIsPremium,
   onOpenProModal = null,
+  onOpenAdminModal = null,
   proUser = null,
   onSignOut = null,
 }) {
@@ -965,6 +966,33 @@ export default function MobileWorkspace({
                         >
                           <Crown className="w-3.5 h-3.5 text-amber-400" />
                           <span>Account &amp; Pro Settings</span>
+                        </button>
+                      )}
+
+                      {onOpenAdminModal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileMenuOpen(false);
+                            onOpenAdminModal();
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            background: 'rgba(16, 185, 129, 0.14)',
+                            border: '1px solid rgba(52, 211, 153, 0.42)',
+                            color: '#6ee7b7',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Crown className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Admin Dashboard</span>
                         </button>
                       )}
 

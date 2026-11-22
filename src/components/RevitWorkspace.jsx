@@ -28,12 +28,10 @@ import { ROOF_TYPES, SHAPE_PRESETS } from '../utils/roofMath';
 import { UNIT_SYSTEMS, formatLength, formatArea } from '../utils/units';
 import { CURRENCIES, MATERIAL_PROFILES, formatCurrency } from '../utils/materials';
 import { BUILDING_STAGES } from '../utils/stagePresets';
-import { getUserInitials, getUserDisplayName } from '../utils/proSession';
+import { getUserInitials, getUserDisplayName, isAdminEmail } from '../utils/proSession';
 import Roof3DViewer from './Roof3DViewer';
 import Roof2DDiagram from './Roof2DDiagram';
 import MobileWorkspace from './MobileWorkspace';
-
-const DEVELOPER_EMAILS = ['davidakinbode19@gmail.com', 'sijiteksub@gmail.com'];
 
 export default function RevitWorkspace({
   geometry,
@@ -94,6 +92,7 @@ export default function RevitWorkspace({
   handleCopyWcSummary,
   isPremium = false,
   onOpenProModal = null,
+  onOpenAdminModal = null,
   proUser = null,
   onSignOut = null,
 }) {
@@ -165,10 +164,7 @@ export default function RevitWorkspace({
   }, [profileMenuOpen]);
 
   const isCustomShape = Boolean(polygonVertices && polygonVertices.length >= 3);
-  const isDeveloper = Boolean(
-    (typeof import.meta !== 'undefined' && import.meta.env?.DEV) ||
-      DEVELOPER_EMAILS.includes(String(proUser?.email || '').trim().toLowerCase())
-  );
+  const isAdmin = isAdminEmail(proUser?.email);
 
   if (isMobileAppMode) {
     return (
@@ -217,6 +213,7 @@ export default function RevitWorkspace({
         handleCopyWcSummary={handleCopyWcSummary}
         isPremium={isPremium}
         onOpenProModal={onOpenProModal}
+        onOpenAdminModal={onOpenAdminModal}
         proUser={proUser}
         onSignOut={onSignOut}
       />
@@ -383,12 +380,12 @@ export default function RevitWorkspace({
             <span>Guide</span>
           </button>
 
-          {isDeveloper && (
+          {isAdmin && (
             <button
               type="button"
               className="studio-ghost-btn"
               onClick={() => setIsMobileAppMode(true)}
-              title="Developer preview: Mobile App version"
+              title="Admin preview: Mobile App version"
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>Mobile</span>
@@ -542,6 +539,33 @@ export default function RevitWorkspace({
                       >
                         <Crown className="w-3.5 h-3.5 text-amber-400" />
                         <span>Account &amp; Pro Settings</span>
+                      </button>
+                    )}
+
+                    {onOpenAdminModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          onOpenAdminModal();
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          background: 'rgba(16, 185, 129, 0.14)',
+                          border: '1px solid rgba(52, 211, 153, 0.42)',
+                          color: '#6ee7b7',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Admin Dashboard</span>
                       </button>
                     )}
 

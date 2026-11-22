@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import {
   isSupabaseConfigured,
+  isAdminEmail,
   startPaystackCheckout,
   signInWithSupabase,
   signUpWithSupabase,
@@ -307,6 +308,7 @@ export default function ProUpgradeModal({
     }
   };
 
+  const isAdminAccount = isAdminEmail(proEmail);
   const currency = pricingInfo.currency || 'NGN';
   const hasDiscount = Boolean(appliedReferral && pricingInfo.discountKobo > 0);
   const displayFinalPrice = formatKoboAsCurrency(
@@ -398,18 +400,41 @@ export default function ProUpgradeModal({
                       fontSize: '0.74rem',
                       padding: '0.2rem 0.55rem',
                       borderRadius: '999px',
-                      background: isPremium ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.15)',
-                      color: isPremium ? '#34d399' : '#cbd5e1',
+                      background: isAdminAccount
+                        ? 'rgba(16, 185, 129, 0.22)'
+                        : isPremium
+                        ? 'rgba(16, 185, 129, 0.16)'
+                        : 'rgba(148, 163, 184, 0.15)',
+                      color: isAdminAccount ? '#34d399' : isPremium ? '#34d399' : '#cbd5e1',
                     }}
                   >
-                    {isPremium ? 'PRO ACTIVE' : 'FREE PLAN'}
+                    {isAdminAccount ? 'ADMIN • ALL ACCESS' : isPremium ? 'PRO ACTIVE' : 'FREE PLAN'}
                   </span>
                 </div>
 
                 {isPremium ? (
                   /* Active Pro: Pay-As-You-Go AI Scan Credit Balance + On-Demand Top-Up Packs */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {proQuota && (
+                    {isAdminAccount ? (
+                      <div
+                        style={{
+                          padding: '0.7rem 0.8rem',
+                          borderRadius: '9px',
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          border: '1px solid rgba(52, 211, 153, 0.35)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.2rem',
+                        }}
+                      >
+                        <div style={{ fontSize: '0.83rem', fontWeight: 700, color: '#6ee7b7' }}>
+                          Admin Full Access Active — Unlimited AI Sketch Scans
+                        </div>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
+                          All Pro features, BOQs, and the Sijitek Admin Dashboard are permanently unlocked on this account.
+                        </div>
+                      </div>
+                    ) : proQuota && (
                       <div
                         style={{
                           padding: '0.7rem 0.8rem',

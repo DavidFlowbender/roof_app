@@ -570,10 +570,14 @@ export default function PaperSketchModal({
                     Pro AI Auto-Dimension Active
                   </span>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ color: proQuota && proQuota.remaining <= 0 ? '#fca5a5' : 'var(--text-muted)' }}>
-                      {proQuota ? `${proQuota.remaining} scan credits left` : 'Ready'}
+                    <span style={{ color: proQuota && !proQuota.unlimited && proQuota.remaining <= 0 ? '#fca5a5' : 'var(--text-muted)' }}>
+                      {proQuota?.unlimited
+                        ? 'Unlimited (Admin)'
+                        : proQuota
+                        ? `${proQuota.remaining} scan credits left`
+                        : 'Ready'}
                     </span>
-                    {onOpenUpgrade && (
+                    {onOpenUpgrade && !proQuota?.unlimited && (
                       <button
                         type="button"
                         onClick={onOpenUpgrade}

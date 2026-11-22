@@ -1,3 +1,15 @@
+export const DEFAULT_ADMIN_EMAILS = ['sijiteksub@gmail.com'];
+
+export function isAdminEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!normalized) return false;
+  const extra = String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return DEFAULT_ADMIN_EMAILS.includes(normalized) || extra.includes(normalized);
+}
+
 export function getSupabaseConfig() {
   return {
     supabaseUrl: (process.env.SUPABASE_URL || '').trim().replace(/\/$/, ''),

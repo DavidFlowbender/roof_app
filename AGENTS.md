@@ -10,8 +10,9 @@
 
 ## Product & Geometry Invariants
 - **Clean Start on Login/Load:** Start both desktop and mobile on a blank 2D/3D canvas ready for a new drawing; keep sample/default floor plans inside the **Examples** dropdown.
-- **Developer-Only Laptop Mobile Toggle:** Keep the laptop header's `Mobile` preview toggle visible only in local `DEV` mode or for developer accounts (`davidakinbode19@gmail.com`, `sijiteksub@gmail.com`).
+- **Admin-Only Laptop Mobile Toggle:** Keep the laptop header's `Mobile` preview toggle visible strictly for the admin account (`sijiteksub@gmail.com`) only.
 - **Stage-Specific Base Dimensions:**
   - **Foundation Level:** Automatically add editable eaves overhang (`0.5m` default per side) to drawn dimensions.
   - **Parapet & Woodwork Levels:** Keep drawn base dimensions exact (`+0m` extra overhang).
 - **Pro Gating:** Keep AI Sketch Auto-Dimension, Woodwork & Timber BOQ, and Water Collector (WC) BOQ gated behind `isPremium`.
+- **Single Admin Account:** Only `sijiteksub@gmail.com` is the admin account — it automatically receives full access to all Pro features (including unlimited AI sketch scans) and exclusive access to the **Sijitek Admin Dashboard** (both client- and server-side).

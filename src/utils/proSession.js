@@ -99,6 +99,31 @@ export function extractPartnerLinkFromUrl() {
   return null;
 }
 
+export const ADMIN_EMAILS = ['sijiteksub@gmail.com'];
+
+export function isAdminEmail(email) {
+  return ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+}
+
+export async function callAdminReferralsApi(accessToken, payload = { action: 'list' }) {
+  if (!accessToken) {
+    throw new Error('Sign in with an admin account first.');
+  }
+  const resp = await fetch('/api/admin-referrals', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.error || `Admin request failed (${resp.status}).`);
+  }
+  return data;
+}
+
 export async function fetchPartnerStats(code, token) {
   const resp = await fetch('/api/partner-stats', {
     method: 'POST',
@@ -477,16 +502,27 @@ export async function fetchSupabaseProProfile(session) {
 
   const rows = await resp.json();
   const profile = rows?.[0];
+  const isAdmin = isAdminEmail(activeSession.user?.email || profile?.email);
   if (!profile) {
+    if (isAdmin) {
+      const adminQuota = { used: 0, limit: 999999, remaining: 999999, unlimited: true };
+      saveStoredProStatus({ isPro: true, quota: adminQuota });
+      return { isPro: true, quota: adminQuota, sessionValid: true, session: activeSession };
+    }
     saveStoredProStatus({ isPro: false, quota: null });
     return { isPro: false, quota: null, sessionValid: true, session: activeSession };
   }
 
   const expired = profile.plan_expires_at && new Date(profile.plan_expires_at) <= new Date();
-  const isPro = Boolean(profile.is_pro && !expired);
-  const limit = Number(profile.ai_scans_limit) || 100;
+  const isPro = Boolean(isAdmin || (profile.is_pro && !expired));
+  const limit = isAdmin ? 999999 : Number(profile.ai_scans_limit) || 100;
   const used = Number(profile.ai_scans_used) || 0;
-  const quota = { used, limit, remaining: Math.max(0, limit - used) };
+  const quota = {
+    used,
+    limit,
+    remaining: isAdmin ? 999999 : Math.max(0, limit - used),
+    unlimited: isAdmin,
+  };
 
   saveStoredProStatus({ isPro, quota });
 
