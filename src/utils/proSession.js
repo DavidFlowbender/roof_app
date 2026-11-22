@@ -546,9 +546,37 @@ export async function fetchSupabaseProProfile(session) {
   }
 
   const rows = await resp.json();
-  const profile = rows?.[0];
+  let profile = rows?.[0];
   const isAdmin = isAdminEmail(activeSession.user?.email || profile?.email);
+
+  // Self-heal missing profile row (e.g. if user already existed in auth.users after profiles cleanup)
   if (!profile) {
+    try {
+      const syncResp = await fetch('/api/sync-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeSession.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (syncResp.ok) {
+        const synced = await syncResp.json().catch(() => null);
+        if (synced?.ok) {
+          const syncedStatus = { isPro: Boolean(synced.isPro), quota: synced.quota || null };
+          saveStoredProStatus(syncedStatus);
+          return {
+            isPro: syncedStatus.isPro,
+            quota: syncedStatus.quota,
+            sessionValid: true,
+            session: activeSession,
+          };
+        }
+      }
+    } catch {
+      // Fall back gracefully below
+    }
+
     if (isAdmin) {
       const adminQuota = { used: 0, limit: 999999, remaining: 999999, unlimited: true };
       saveStoredProStatus({ isPro: true, quota: adminQuota });
