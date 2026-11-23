@@ -82,6 +82,7 @@ export function estimateMaterials(
     parapetConfig = null,
     woodworkConfig = null,
     includeZeroItems = false,
+    allowTimber = true,
   } = options;
 
   // 1. Primary Covering Quantity
@@ -361,7 +362,8 @@ export function estimateMaterials(
   // WOODWORK / TIMBER CARCASS BOQ ITEMS
   // ==========================================
   const timberItems = [];
-  if (buildingStage === 'woodwork' || woodworkConfig?.includeTimberBOQ) {
+  const shouldIncludeTimber = Boolean(allowTimber) && (buildingStage === 'woodwork' || woodworkConfig?.includeTimberBOQ);
+  if (shouldIncludeTimber) {
     const L = geometry?.buildingDimensions?.length || 12;
     const B = geometry?.buildingDimensions?.breadth || 8;
     const H = Math.max(0.5, geometry?.roofHeight || 2.0);
@@ -504,7 +506,7 @@ export function estimateMaterials(
     });
 
   const customWoodItems =
-    buildingStage === 'woodwork' || woodworkConfig?.includeTimberBOQ || includeZeroItems
+    shouldIncludeTimber || (Boolean(allowTimber) && includeZeroItems)
       ? rawExtraItems
           .filter((ci) => ci && ci.scope === 'wood' && String(ci.name || '').trim())
           .map((ci) => {

@@ -252,9 +252,20 @@ export default function App() {
   const handleProSignOut = () => {
     saveAuthSession(null);
     saveStoredProStatus(null);
+    setPreviewProFlag(false);
+    setAdminModalOpen(false);
     setProSession(null);
     setIsPremium(false);
     setProQuota(null);
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('roofcalc_pending_paystack_ref_v1');
+        window.sessionStorage.removeItem('roofcalc_active_sketch_modal_v1');
+        window.google?.accounts?.id?.disableAutoSelect?.();
+      }
+    } catch {
+      // Ignore storage errors
+    }
   };
 
   // Top Workspace Ribbons Navigation ('studio' | 'specs' | 'boq' | 'dashboard')
@@ -781,7 +792,7 @@ export default function App() {
     });
   }, [length, breadth, effectiveHeight, overhang, roofType, wastePercentage, extensions, polygonVertices]);
 
-  // Bill of Quantities / Materials Results (Stage Aware)
+  // Bill of Quantities / Materials Results (Stage Aware, Timber BOQ Pro-gated)
   const materials = useMemo(() => {
     return estimateMaterials(
       geometry,
@@ -792,9 +803,10 @@ export default function App() {
         buildingStage,
         parapetConfig,
         woodworkConfig,
+        allowTimber: effectiveIsPremium,
       }
     );
-  }, [geometry, selectedMaterial, currencyCode, customPrices, buildingStage, parapetConfig, woodworkConfig]);
+  }, [geometry, selectedMaterial, currencyCode, customPrices, buildingStage, parapetConfig, woodworkConfig, effectiveIsPremium]);
 
   // Water Collector (WC) Estimate
   const wcMaterials = useMemo(() => {

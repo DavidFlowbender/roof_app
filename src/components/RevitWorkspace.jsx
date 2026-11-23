@@ -166,6 +166,13 @@ export default function RevitWorkspace({
   const isCustomShape = Boolean(polygonVertices && polygonVertices.length >= 3);
   const isAdmin = isAdminEmail(proUser?.email);
 
+  // If admin logs out while previewing Mobile mode on a laptop/desktop, automatically return to Desktop Studio
+  useEffect(() => {
+    if (!isAdmin && isMobileAppMode && typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setIsMobileAppMode(false);
+    }
+  }, [isAdmin, isMobileAppMode]);
+
   if (isMobileAppMode) {
     return (
       <MobileWorkspace
@@ -1047,13 +1054,20 @@ export default function RevitWorkspace({
           {buildingStage === 'woodwork' && (
             <>
               <div className="studio-drawer-item">
-                <label>Include Timber BOQ</label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <span>Include Timber BOQ</span>
+                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
+                </label>
                 <input
                   type="checkbox"
-                  checked={woodworkConfig.includeTimberBOQ}
-                  onChange={(e) =>
-                    setWoodworkConfig({ ...woodworkConfig, includeTimberBOQ: e.target.checked })
-                  }
+                  checked={isPremium && woodworkConfig.includeTimberBOQ}
+                  onChange={(e) => {
+                    if (!isPremium) {
+                      onOpenProModal?.();
+                      return;
+                    }
+                    setWoodworkConfig({ ...woodworkConfig, includeTimberBOQ: e.target.checked });
+                  }}
                 />
               </div>
               <div className="studio-drawer-item">
@@ -1362,6 +1376,52 @@ export default function RevitWorkspace({
               </div>
 
               <div className="boq-table-wrapper">
+                {!isPremium && (buildingStage === 'woodwork' || woodworkConfig?.includeTimberBOQ) && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      flexWrap: 'wrap',
+                      padding: '10px 14px',
+                      marginBottom: '10px',
+                      borderRadius: '10px',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.4)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12.5px', color: '#fef3c7' }}>
+                      <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        <strong>Woodwork &amp; Timber BOQ (Pro Feature):</strong> Sign in with a RoofCalc Pro account to unlock full rafter, purlin, tie beam, kingpost, nail, and timber cost schedules.
+                      </span>
+                    </div>
+                    {onOpenProModal && (
+                      <button
+                        type="button"
+                        onClick={onOpenProModal}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          color: '#0f172a',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        <span>Unlock Pro Timber BOQ</span>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <table className="boq-table">
                   <thead>
                     <tr>

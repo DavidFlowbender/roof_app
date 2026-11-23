@@ -2244,9 +2244,14 @@ export default function MobileWorkspace({
                     cursor: 'pointer',
                     background: priceCategory === 'wc' ? '#0ea5e9' : 'transparent',
                     color: priceCategory === 'wc' ? '#ffffff' : '#94a3b8',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '3px',
                   }}
                 >
-                  WC Rates
+                  <span>WC Rates</span>
+                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
                 </button>
                 <button
                   type="button"
@@ -2260,12 +2265,77 @@ export default function MobileWorkspace({
                     cursor: 'pointer',
                     background: priceCategory === 'wood' ? '#f59e0b' : 'transparent',
                     color: priceCategory === 'wood' ? '#0f172a' : '#94a3b8',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '3px',
                   }}
                 >
-                  Wood Rates
+                  <span>Wood Rates</span>
+                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
                 </button>
               </div>
 
+              {!isPremium && (priceCategory === 'wc' || priceCategory === 'wood') ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '20px',
+                    gap: '10px',
+                    background: 'linear-gradient(160deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.95))',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '14px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: 'rgba(245, 158, 11, 0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#fef3c7' }}>
+                    {priceCategory === 'wc' ? 'WC Rates — RoofCalc Pro' : 'Woodwork Rates — RoofCalc Pro'}
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#cbd5e1', margin: 0, lineHeight: 1.5 }}>
+                    Sign in with a RoofCalc Pro account to configure custom {priceCategory === 'wc' ? 'Water Collector' : 'Woodwork & Timber'} material rates and quotations.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => (onOpenProModal ? onOpenProModal() : setLocalIsPremium(true))}
+                    style={{
+                      marginTop: '4px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 16px',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Crown className="w-4 h-4" />
+                    <span>Unlock RoofCalc Pro</span>
+                  </button>
+                </div>
+              ) : (
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {priceCategory === 'roof' && (
                   <div style={{ display: 'grid', gridTemplateColumns: setWastePercentage ? '1fr 1fr 82px' : '1fr 1fr', gap: '6px' }}>
@@ -2650,6 +2720,7 @@ export default function MobileWorkspace({
                   </div>
                 </form>
               </div>
+              )}
 
               <button
                 type="button"
