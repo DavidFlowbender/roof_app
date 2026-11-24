@@ -79,6 +79,7 @@ export default function MobileWorkspace({
   isPremium: externalIsPremium,
   onOpenProModal = null,
   onOpenAdminModal = null,
+  onInstallApp = null,
   proUser = null,
   onSignOut = null,
 }) {
@@ -2887,6 +2888,32 @@ export default function MobileWorkspace({
                     </div>
                   )}
                 </div>
+
+                {onInstallApp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      onInstallApp();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(14, 165, 233, 0.18))',
+                      color: '#6ee7b7',
+                      border: '1px solid rgba(52, 211, 153, 0.45)',
+                      borderRadius: '9px',
+                      padding: '9px 10px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Install RoofCalc Pro App</span>
+                  </button>
+                )}
 
                 {setVideoModalOpen && (
                   <button

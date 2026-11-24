@@ -93,6 +93,7 @@ export default function RevitWorkspace({
   isPremium = false,
   onOpenProModal = null,
   onOpenAdminModal = null,
+  onInstallApp = null,
   proUser = null,
   onSignOut = null,
 }) {
@@ -221,6 +222,7 @@ export default function RevitWorkspace({
         isPremium={isPremium}
         onOpenProModal={onOpenProModal}
         onOpenAdminModal={onOpenAdminModal}
+        onInstallApp={onInstallApp}
         proUser={proUser}
         onSignOut={onSignOut}
       />
@@ -374,6 +376,19 @@ export default function RevitWorkspace({
             >
               <Crown className="w-3.5 h-3.5" />
               <span>{isPremium ? 'Pro Active' : 'Go Pro'}</span>
+            </button>
+          )}
+
+          {onInstallApp && (
+            <button
+              type="button"
+              className="studio-ghost-btn"
+              onClick={onInstallApp}
+              title="Install RoofCalc Pro App"
+              style={{ borderColor: 'rgba(16, 185, 129, 0.45)', color: '#34d399' }}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Install App</span>
             </button>
           )}
 
