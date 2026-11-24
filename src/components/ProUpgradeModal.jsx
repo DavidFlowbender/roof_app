@@ -17,6 +17,8 @@ import {
   startPaystackCheckout,
   signInWithSupabase,
   signUpWithSupabase,
+  requestPasswordReset,
+  updateSupabasePassword,
   signInWithGoogle,
   getGoogleClientId,
   isDirectGoogleSignInSupported,
@@ -69,14 +71,18 @@ export default function ProUpgradeModal({
   proAccessToken = '',
   proQuota = null,
   initialError = '',
+  isPasswordRecovery = false,
+  onPasswordResetComplete,
   onAuthSuccess,
   onRefreshStatus,
   onSignOut,
   onTogglePreviewPro,
 }) {
-  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
+  const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup' | 'forgot'
   const [email, setEmail] = useState(proEmail || '');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [checkoutBusyId, setCheckoutBusyId] = useState(''); // '' | 'pro_upgrade' | pack.id
   const [feedback, setFeedback] = useState('');
@@ -381,6 +387,24 @@ export default function ProUpgradeModal({
     e.preventDefault();
     setErrorMsg('');
     setFeedback('');
+
+    if (authMode === 'forgot') {
+      if (!email.trim() || !email.includes('@')) {
+        setErrorMsg('Enter the email address for your account.');
+        return;
+      }
+      setIsBusy(true);
+      try {
+        await requestPasswordReset(email);
+        setFeedback(`Password reset link sent to ${email.trim()}. Check your inbox and click Reset Password.`);
+      } catch (err) {
+        setErrorMsg(err?.message || 'Could not send password reset email.');
+      } finally {
+        setIsBusy(false);
+      }
+      return;
+    }
+
     if (!email.trim() || password.length < 6) {
       setErrorMsg('Enter a valid email and a password of at least 6 characters.');
       return;
@@ -401,6 +425,34 @@ export default function ProUpgradeModal({
       }
     } catch (err) {
       setErrorMsg(err?.message || 'Authentication failed.');
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleUpdateRecoveredPassword = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setFeedback('');
+    if (newPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+    setIsBusy(true);
+    try {
+      await updateSupabasePassword(proAccessToken, newPassword);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setFeedback('Password updated successfully!');
+      if (onPasswordResetComplete) {
+        onPasswordResetComplete();
+      }
+    } catch (err) {
+      setErrorMsg(err?.message || 'Could not update password.');
     } finally {
       setIsBusy(false);
     }
@@ -484,7 +536,76 @@ export default function ProUpgradeModal({
         {supabaseEnabled ? (
           /* Live Supabase + Paystack Auth & Billing Flow */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            {proEmail ? (
+            {isPasswordRecovery && proAccessToken ? (
+              <form
+                onSubmit={handleUpdateRecoveredPassword}
+                style={{
+                  padding: '1rem',
+                  borderRadius: '10px',
+                  background: 'rgba(15, 23, 42, 0.55)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.7rem',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Set a New Password
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                    {proEmail ? `Choose a new password for ${proEmail}.` : 'Choose a new password for your RoofCalc Pro account.'}
+                  </div>
+                </div>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password (min 6 chars)"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  style={{
+                    padding: '0.55rem 0.7rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'rgba(2, 6, 23, 0.55)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  style={{
+                    padding: '0.55rem 0.7rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'rgba(2, 6, 23, 0.55)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+                {(errorMsg || initialError) && (
+                  <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                )}
+                {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
+                <button
+                  type="submit"
+                  className="btn-primary-action"
+                  disabled={isBusy}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                >
+                  {isBusy && <Loader2 size={15} className="animate-spin" />}
+                  <span>Save New Password</span>
+                </button>
+              </form>
+            ) : proEmail ? (
               <div
                 style={{
                   padding: '0.9rem',
@@ -1030,74 +1151,165 @@ export default function ProUpgradeModal({
                 </div>
 
                 <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    {['signin', 'signup'].map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setAuthMode(mode)}
+                  {authMode === 'forgot' ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          Reset your password
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode('signin');
+                            setErrorMsg('');
+                            setFeedback('');
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#38bdf8',
+                            fontSize: '0.76rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          ← Back to Sign In
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                        Enter your account email and we&apos;ll send a reset link from{' '}
+                        <strong style={{ color: 'var(--text-secondary)' }}>support@sijiteksolutions.com</strong>.
+                      </div>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Email address"
+                        required
                         style={{
-                          flex: 1,
-                          padding: '0.45rem',
+                          padding: '0.55rem 0.7rem',
                           borderRadius: '8px',
-                          border: `1px solid ${authMode === mode ? '#0ea5e9' : 'var(--border-color)'}`,
-                          background: authMode === mode ? 'rgba(14, 165, 233, 0.14)' : 'transparent',
-                          color: authMode === mode ? '#38bdf8' : 'var(--text-secondary)',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(2, 6, 23, 0.55)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.85rem',
                         }}
+                      />
+                      {(errorMsg || initialError) && (
+                        <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                      )}
+                      {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem', lineHeight: 1.45 }}>{feedback}</div>}
+                      <button
+                        type="submit"
+                        className="btn-primary-action"
+                        disabled={isBusy}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
                       >
-                        {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                        {isBusy && <Loader2 size={15} className="animate-spin" />}
+                        <span>Send Reset Link</span>
                       </button>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {['signin', 'signup'].map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => {
+                              setAuthMode(mode);
+                              setErrorMsg('');
+                              setFeedback('');
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '0.45rem',
+                              borderRadius: '8px',
+                              border: `1px solid ${authMode === mode ? '#0ea5e9' : 'var(--border-color)'}`,
+                              background: authMode === mode ? 'rgba(14, 165, 233, 0.14)' : 'transparent',
+                              color: authMode === mode ? '#38bdf8' : 'var(--text-secondary)',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                          </button>
+                        ))}
+                      </div>
 
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email address"
-                    required
-                    style={{
-                      padding: '0.55rem 0.7rem',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      background: 'rgba(2, 6, 23, 0.55)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password (min 6 chars)"
-                    required
-                    style={{
-                      padding: '0.55rem 0.7rem',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      background: 'rgba(2, 6, 23, 0.55)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.85rem',
-                    }}
-                  />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Email address"
+                        required
+                        style={{
+                          padding: '0.55rem 0.7rem',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(2, 6, 23, 0.55)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.85rem',
+                        }}
+                      />
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Password (min 6 chars)"
+                        required
+                        style={{
+                          padding: '0.55rem 0.7rem',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border-color)',
+                          background: 'rgba(2, 6, 23, 0.55)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.85rem',
+                        }}
+                      />
 
-                  {(errorMsg || initialError) && (
-                    <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                      {authMode === 'signin' && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.2rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAuthMode('forgot');
+                              setErrorMsg('');
+                              setFeedback('');
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#38bdf8',
+                              fontSize: '0.76rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: '0.1rem 0',
+                            }}
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                      )}
+
+                      {(errorMsg || initialError) && (
+                        <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{errorMsg || initialError}</div>
+                      )}
+                      {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
+
+                      <button
+                        type="submit"
+                        className="btn-primary-action"
+                        disabled={isBusy}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                      >
+                        {isBusy && <Loader2 size={15} className="animate-spin" />}
+                        <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                      </button>
+                    </>
                   )}
-                  {feedback && <div style={{ color: '#6ee7b7', fontSize: '0.78rem' }}>{feedback}</div>}
-
-                  <button
-                    type="submit"
-                    className="btn-primary-action"
-                    disabled={isBusy}
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
-                  >
-                    {isBusy && <Loader2 size={15} className="animate-spin" />}
-                    <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
-                  </button>
                 </form>
               </div>
             )}

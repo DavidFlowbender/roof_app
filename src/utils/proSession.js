@@ -455,12 +455,52 @@ export async function signInWithSupabase(email, password) {
 }
 
 export async function signUpWithSupabase(email, password) {
-  const data = await supabaseAuthRequest('/auth/v1/signup', {
+  const redirectTo = typeof window !== 'undefined' ? window.location.origin : '';
+  const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+  const data = await supabaseAuthRequest(`/auth/v1/signup${query}`, {
     email: String(email).trim(),
     password,
   });
   if (data?.access_token) {
     saveAuthSession(data);
+  }
+  return data;
+}
+
+export async function requestPasswordReset(email) {
+  const cleanEmail = String(email || '').trim();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('Please enter a valid email address.');
+  }
+  const redirectTo = typeof window !== 'undefined' ? window.location.origin : '';
+  const query = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+  await supabaseAuthRequest(`/auth/v1/recover${query}`, {
+    email: cleanEmail,
+  });
+  return { ok: true };
+}
+
+export async function updateSupabasePassword(accessToken, newPassword) {
+  if (!accessToken) {
+    throw new Error('Your password reset link has expired. Please request a new one.');
+  }
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters.');
+  }
+  const url = getEnv('VITE_SUPABASE_URL').replace(/\/$/, '');
+  const anonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+  const resp = await fetch(`${url}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: newPassword }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(data?.msg || data?.error_description || data?.error || `Could not update password (${resp.status})`);
   }
   return data;
 }
@@ -560,8 +600,9 @@ export async function consumeOAuthCallbackFromUrl(rawUrlOverride = '') {
 
   const accessToken = hashParams.get('access_token');
   const refreshToken = hashParams.get('refresh_token') || '';
+  const authType = (hashParams.get('type') || queryParams.get('type') || '').toLowerCase();
   if (!accessToken) {
-    return { session: null, error: null };
+    return { session: null, error: null, type: '' };
   }
 
   const url = getEnv('VITE_SUPABASE_URL').replace(/\/$/, '');
@@ -577,7 +618,7 @@ export async function consumeOAuthCallbackFromUrl(rawUrlOverride = '') {
       if (!hasOverride) {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
-      return { session: null, error: 'Google sign-in session could not be verified.' };
+      return { session: null, error: 'Sign-in link could not be verified or has expired.', type: authType };
     }
     const user = await resp.json();
     const session = { access_token: accessToken, refresh_token: refreshToken, user };
@@ -585,12 +626,12 @@ export async function consumeOAuthCallbackFromUrl(rawUrlOverride = '') {
     if (!hasOverride) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-    return { session, error: null };
+    return { session, error: null, type: authType };
   } catch (err) {
     if (!hasOverride) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-    return { session: null, error: err?.message || 'Google sign-in failed.' };
+    return { session: null, error: err?.message || 'Sign-in failed.', type: authType };
   }
 }
 
