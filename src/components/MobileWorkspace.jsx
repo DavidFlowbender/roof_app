@@ -83,8 +83,8 @@ export default function MobileWorkspace({
   proUser = null,
   onSignOut = null,
 }) {
-  // Pages: '2d' | 'roof' | 'wc' | 'wood' | 'prices'
-  const [activePage, setActivePage] = useState('2d');
+  // Pages: 'roof' (unified 2D Plan / 3D Roof / Roof Quote) | 'wc' | 'wood' | 'prices'
+  const [activePage, setActivePage] = useState('roof');
   // Collapsible left sidebar drawer
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Collapsible accordion sections inside sidebar
@@ -97,8 +97,8 @@ export default function MobileWorkspace({
   const isPremium = externalIsPremium !== undefined ? externalIsPremium : localIsPremium;
   // Toggle inside Set Prices page: 'roof' | 'wc' | 'wood'
   const [priceCategory, setPriceCategory] = useState('roof');
-  // Sub-page toggles inside Roof, WC, and Woodwork pages: 'view' | 'quote'
-  const [roofSubPage, setRoofSubPage] = useState('view');
+  // Sub-page toggles: Roof ('2d' | 'view' | 'quote'), WC & Woodwork ('view' | 'quote')
+  const [roofSubPage, setRoofSubPage] = useState('2d');
   const [wcSubPage, setWcSubPage] = useState('view');
   const [woodSubPage, setWoodSubPage] = useState('view');
 
@@ -242,8 +242,7 @@ export default function MobileWorkspace({
   };
 
   const navItems = [
-    { id: '2d', label: '2D Plan & Sketch', icon: Ruler },
-    { id: 'roof', label: 'Roof (3D & Quote)', icon: Layers },
+    { id: 'roof', label: 'Roof Plan & Quote', icon: Layers },
     { id: 'wc', label: 'WC (Water Collector)', icon: Droplets, pro: true },
     { id: 'wood', label: 'Woodwork (3D & Quote)', icon: Hammer, pro: true },
     { id: 'prices', label: 'Set Prices (Materials / Labour / Transport)', icon: DollarSign },
@@ -766,10 +765,10 @@ export default function MobileWorkspace({
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                 <span style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.01em' }}>RoofCalc</span>
                 <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>
-                {activePage === '2d'
-                  ? '• 2D Plan'
-                  : activePage === 'roof'
-                  ? roofSubPage === 'view'
+                {activePage === 'roof'
+                  ? roofSubPage === '2d'
+                    ? '• 2D Plan'
+                    : roofSubPage === 'view'
                     ? '• Roof 3D'
                     : '• Roof Quote'
                   : activePage === 'wc'
@@ -1079,198 +1078,248 @@ export default function MobileWorkspace({
             gap: '8px',
           }}
         >
-          {/* PAGE: 2D PLAN & FINGER SKETCH */}
-          {activePage === '2d' && (
-            <>
-              {handleStageSelect && (
-                <div
+          {/* UNIFIED PAGE: ROOF PLAN & QUOTE (2D PLAN | 3D VIEW | ROOF QUOTE) */}
+          {activePage === 'roof' && (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {/* Unified 3-Way Roof View Ribbon + Unit Toggle */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  background: '#111827',
+                  border: '1px solid #1f2937',
+                  borderRadius: '10px',
+                  padding: '4px',
+                }}
+              >
+                {[
+                  { id: '2d', label: '2D Plan', icon: Ruler },
+                  { id: 'view', label: '3D Roof', icon: Box },
+                  { id: 'quote', label: 'Quote', icon: Layers },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  const active = roofSubPage === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRoofSubPage(tab.id)}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '6px 6px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        background: active ? '#0ea5e9' : 'transparent',
+                        color: active ? '#ffffff' : '#94a3b8',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setUnitSystem(unitSystem === UNIT_SYSTEMS.METRIC ? UNIT_SYSTEMS.IMPERIAL : UNIT_SYSTEMS.METRIC)}
                   style={{
                     flexShrink: 0,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 10px',
-                    borderBottom: '1px solid var(--border-color)',
-                    background: 'rgba(15, 23, 42, 0.72)',
+                    justifyContent: 'center',
+                    background: '#1e293b',
+                    color: '#38bdf8',
+                    border: '1px solid #334155',
+                    borderRadius: '7px',
+                    padding: '5px 8px',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                   }}
+                  title="Toggle Metric (m) / Imperial (ft)"
                 >
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>
-                    Level:
-                  </span>
-                  <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
-                    {BUILDING_STAGES.map((stg) => {
-                      const active = buildingStage === stg.id;
-                      return (
-                        <button
-                          key={stg.id}
-                          type="button"
-                          onClick={() => handleStageSelect(stg.id)}
-                          style={{
-                            flex: 1,
-                            padding: '5px 6px',
-                            borderRadius: '7px',
-                            border: `1px solid ${active ? stg.color : 'var(--border-color)'}`,
-                            background: active ? stg.bgLight : 'rgba(2, 6, 23, 0.45)',
-                            color: active ? stg.color : 'var(--text-secondary)',
-                            fontSize: '11.5px',
-                            fontWeight: active ? 700 : 500,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {stg.shortName}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setUnitSystem(unitSystem === UNIT_SYSTEMS.METRIC ? UNIT_SYSTEMS.IMPERIAL : UNIT_SYSTEMS.METRIC)}
+                  {unitLabel}
+                </button>
+              </div>
+
+              {/* SUB-PAGE 1: 2D PLAN & FINGER SKETCH */}
+              {roofSubPage === '2d' && (
+                <>
+                  {handleStageSelect && (
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '5px 8px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        background: 'rgba(15, 23, 42, 0.72)',
+                      }}
+                    >
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>
+                        Level:
+                      </span>
+                      <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
+                        {BUILDING_STAGES.map((stg) => {
+                          const active = buildingStage === stg.id;
+                          return (
+                            <button
+                              key={stg.id}
+                              type="button"
+                              onClick={() => handleStageSelect(stg.id)}
+                              style={{
+                                flex: 1,
+                                padding: '5px 6px',
+                                borderRadius: '7px',
+                                border: `1px solid ${active ? stg.color : 'var(--border-color)'}`,
+                                background: active ? stg.bgLight : 'rgba(2, 6, 23, 0.45)',
+                                color: active ? stg.color : 'var(--text-secondary)',
+                                fontSize: '11.5px',
+                                fontWeight: active ? 700 : 500,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {stg.shortName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Foundation Eaves (+0.5m each side, editable) vs Parapet/Woodwork (+0m exact) */}
+                  <div
                     style={{
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      background: '#1e293b',
-                      color: '#38bdf8',
-                      border: '1px solid #334155',
-                      borderRadius: '7px',
-                      padding: '5px 8px',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '5px 10px',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      borderRadius: '8px',
+                      border: '1px solid #1e293b',
                       fontSize: '11px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
                     }}
-                    title="Toggle Metric (m) / Imperial (ft)"
                   >
-                    {unitLabel}
-                  </button>
-                </div>
+                    {buildingStage === 'foundation' ? (
+                      <>
+                        <span style={{ color: '#94a3b8', fontWeight: 600 }}>
+                          Eaves (+both sides):
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleFoundationOverhangChange &&
+                              handleFoundationOverhangChange(Math.max(0, (Number(foundationOverhangM) || 0) - 0.05))
+                            }
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              background: '#1e293b',
+                              color: '#f8fafc',
+                              border: '1px solid #334155',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            −
+                          </button>
+                          <input
+                            className="compact-num-input"
+                            type="number"
+                            min="0"
+                            max="2"
+                            step="0.05"
+                            aria-label="Foundation eaves per side (m)"
+                            value={foundationOverhangM}
+                            onChange={(e) =>
+                              handleFoundationOverhangChange && handleFoundationOverhangChange(e.target.value)
+                            }
+                            style={{
+                              width: '50px',
+                              background: '#090e1a',
+                              color: '#34d399',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '2px 4px',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              textAlign: 'center',
+                            }}
+                          />
+                          <span style={{ color: '#34d399', fontWeight: 700 }}>m</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleFoundationOverhangChange &&
+                              handleFoundationOverhangChange((Number(foundationOverhangM) || 0) + 0.05)
+                            }
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '6px',
+                              background: '#1e293b',
+                              color: '#f8fafc',
+                              border: '1px solid #334155',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24', fontWeight: 700 }}>
+                        {buildingStage === 'parapet'
+                          ? 'Parapet Level: Drawn base dimensions stay exact (+0m)'
+                          : 'Woodwork Level: Base dimensions stay exact (+0m)'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Full-Height Interactive 2D Canvas */}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Roof2DDiagram
+                      geometry={geometry}
+                      roofType={roofType}
+                      unitSystem={unitSystem}
+                      polygonVertices={polygonVertices}
+                      hasActiveDesign={hasActiveDesign}
+                      onResetToBlank={onResetToBlank}
+                      onActivateRectangle={onActivateRectangle}
+                      onPolygonChange={(pts) => setPolygonVertices(pts)}
+                      onDimensionsChange={({ length: l, breadth: b }) => {
+                        handleLengthChange(l);
+                        handleBreadthChange(b);
+                      }}
+                      isSplitView={false}
+                      buildingStage={buildingStage}
+                      parapetConfig={parapetConfig}
+                      woodworkConfig={woodworkConfig}
+                      sketchUnderlayImage={sketchUnderlayImage}
+                      mobileInteractive={true}
+                    />
+                  </div>
+                </>
               )}
 
-              {/* Foundation Eaves (+0.5m each side, editable) vs Parapet/Woodwork (+0m exact) */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '8px',
-                  padding: '5px 10px',
-                  background: 'rgba(15, 23, 42, 0.85)',
-                  borderBottom: '1px solid #1e293b',
-                  fontSize: '11px',
-                }}
-              >
-                {buildingStage === 'foundation' ? (
-                  <>
-                    <span style={{ color: '#94a3b8', fontWeight: 600 }}>
-                      Eaves (+both sides):
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleFoundationOverhangChange &&
-                          handleFoundationOverhangChange(Math.max(0, (Number(foundationOverhangM) || 0) - 0.05))
-                        }
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '6px',
-                          background: '#1e293b',
-                          color: '#f8fafc',
-                          border: '1px solid #334155',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        −
-                      </button>
-                      <input
-                        className="compact-num-input"
-                        type="number"
-                        min="0"
-                        max="2"
-                        step="0.05"
-                        aria-label="Foundation eaves per side (m)"
-                        value={foundationOverhangM}
-                        onChange={(e) =>
-                          handleFoundationOverhangChange && handleFoundationOverhangChange(e.target.value)
-                        }
-                        style={{
-                          width: '50px',
-                          background: '#090e1a',
-                          color: '#34d399',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '2px 4px',
-                          fontSize: '12px',
-                          fontWeight: 800,
-                          textAlign: 'center',
-                        }}
-                      />
-                      <span style={{ color: '#34d399', fontWeight: 700 }}>m</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleFoundationOverhangChange &&
-                          handleFoundationOverhangChange((Number(foundationOverhangM) || 0) + 0.05)
-                        }
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '6px',
-                          background: '#1e293b',
-                          color: '#f8fafc',
-                          border: '1px solid #334155',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <span style={{ color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24', fontWeight: 700 }}>
-                    {buildingStage === 'parapet'
-                      ? 'Parapet Level: Drawn base dimensions stay exact (+0m)'
-                      : 'Woodwork Level: Base dimensions stay exact (+0m)'}
-                  </span>
-                )}
-              </div>
-
-              {/* Full-Height Interactive 2D Canvas */}
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <Roof2DDiagram
-                  geometry={geometry}
-                  roofType={roofType}
-                  unitSystem={unitSystem}
-                  polygonVertices={polygonVertices}
-                  hasActiveDesign={hasActiveDesign}
-                  onResetToBlank={onResetToBlank}
-                  onActivateRectangle={onActivateRectangle}
-                  onPolygonChange={(pts) => setPolygonVertices(pts)}
-                  onDimensionsChange={({ length: l, breadth: b }) => {
-                    handleLengthChange(l);
-                    handleBreadthChange(b);
-                  }}
-                  isSplitView={false}
-                  buildingStage={buildingStage}
-                  parapetConfig={parapetConfig}
-                  woodworkConfig={woodworkConfig}
-                  sketchUnderlayImage={sketchUnderlayImage}
-                  mobileInteractive={true}
-                />
-              </div>
-            </>
-          )}
-
-          {/* PAGE: ROOF (2 SUB-PAGES: 3D ROOF VIEW & ROOF QUOTE) */}
-          {activePage === 'roof' && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {renderSubPageSwitcher(roofSubPage, setRoofSubPage, '3D View', 'Roof Quote', Layers)}
-
-              {/* SUB-PAGE 1: 3D ROOF VIEW + STYLE/MATERIAL/HEIGHT CONTROLS */}
+              {/* SUB-PAGE 2: 3D ROOF VIEW + STYLE/MATERIAL/HEIGHT CONTROLS */}
               {roofSubPage === 'view' && (
                 <>
                   <div style={{ flex: 1, minHeight: 0, borderRadius: '12px', overflow: 'hidden', border: '1px solid #1f2937' }}>
@@ -1293,7 +1342,7 @@ export default function MobileWorkspace({
                           Draw your walls on 2D Plan, snap a paper sketch, or try an example to preview in 3D.
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
-                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => { setActivePage('roof'); setRoofSubPage('2d'); }} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
                             Draw 2D Plan
                           </button>
                           <button
@@ -1502,7 +1551,7 @@ export default function MobileWorkspace({
                           Draw your walls on 2D Plan, snap a paper sketch, or load an example to view 3D timber framing.
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
-                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => { setActivePage('roof'); setRoofSubPage('2d'); }} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
                             Draw 2D Plan
                           </button>
                           <button
@@ -1698,7 +1747,7 @@ export default function MobileWorkspace({
                           Draw your walls on 2D Plan, snap a paper sketch, or load an example to preview 3D Water Collector pipes.
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px', marginTop: '4px' }}>
-                          <button type="button" onClick={() => setActivePage('2d')} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                          <button type="button" onClick={() => { setActivePage('roof'); setRoofSubPage('2d'); }} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
                             Draw 2D Plan
                           </button>
                           <button
