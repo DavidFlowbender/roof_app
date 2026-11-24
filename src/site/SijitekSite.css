@@ -1,0 +1,1189 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+html {
+  scroll-behavior: smooth;
+}
+
+.sjk-page {
+  --sjk-paper: #f6f4ef;
+  --sjk-surface: #ffffff;
+  --sjk-surface-tint: #efece4;
+  --sjk-ink: #14191f;
+  --sjk-ink-soft: #434d56;
+  --sjk-muted: #6c757d;
+  --sjk-rule: #d9d4c7;
+  --sjk-rule-strong: #c2bbb0;
+  --sjk-forest: #19473a;
+  --sjk-forest-soft: #e6f0ec;
+  --sjk-copper: #b84a27;
+  --sjk-copper-soft: #f7eae5;
+  --sjk-charcoal: #151c22;
+
+  min-height: 100dvh;
+  background-color: var(--sjk-paper);
+  color: var(--sjk-ink);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sjk-mono {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.sjk-serif {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+
+/* Header */
+.sjk-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(246, 244, 239, 0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--sjk-rule);
+}
+
+.sjk-container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.sjk-header-inner {
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.sjk-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--sjk-ink);
+}
+
+.sjk-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  font-weight: 800;
+  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.02em;
+  border-bottom: 3px solid var(--sjk-copper);
+}
+
+.sjk-brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: block;
+  line-height: 1.1;
+}
+
+.sjk-brand-sub {
+  font-size: 10.5px;
+  color: var(--sjk-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 2px;
+}
+
+.sjk-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.sjk-nav-link {
+  color: var(--sjk-ink-soft);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.sjk-nav-link:hover {
+  color: var(--sjk-ink);
+}
+
+.sjk-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: 7px;
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.sjk-nav-cta:hover {
+  background: var(--sjk-forest);
+  transform: translateY(-1px);
+}
+
+/* Top Site Tractor Horizon Strip */
+.sjk-tractor-track {
+  position: relative;
+  height: 40px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--sjk-rule);
+  background:
+    linear-gradient(to bottom, rgba(239, 236, 228, 0.55), rgba(246, 244, 239, 0.95));
+}
+
+.sjk-tractor-track::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 1px;
+  background: repeating-linear-gradient(
+    to right,
+    rgba(20, 25, 31, 0.22) 0,
+    rgba(20, 25, 31, 0.22) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+.sjk-tractor-runner {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 92px;
+  height: 38px;
+  will-change: transform;
+  animation: sjkTractorDrive 22s linear infinite;
+}
+
+.sjk-tractor-body {
+  animation: sjkTractorBounce 0.42s ease-in-out infinite;
+}
+
+.sjk-wheel-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sjkWheelSpin 1.15s linear infinite;
+}
+
+.sjk-wheel-spin-fast {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sjkWheelSpin 0.8s linear infinite;
+}
+
+.sjk-puff-1 {
+  animation: sjkExhaustPuff 1.4s ease-out infinite;
+}
+
+.sjk-puff-2 {
+  animation: sjkExhaustPuff 1.4s ease-out 0.7s infinite;
+}
+
+@keyframes sjkTractorDrive {
+  0% {
+    transform: translateX(-110px);
+  }
+  100% {
+    transform: translateX(calc(100vw + 40px));
+  }
+}
+
+@keyframes sjkTractorBounce {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-0.9px);
+  }
+}
+
+@keyframes sjkWheelSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sjkExhaustPuff {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  25% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-11px, -8px) scale(1.4);
+  }
+}
+
+/* Hero Section — Architectural Drafting Paper Grid */
+.sjk-hero-band {
+  border-bottom: 1px solid var(--sjk-rule);
+  background-image:
+    linear-gradient(to right, rgba(20, 25, 31, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 25, 31, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.sjk-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 40px;
+  align-items: center;
+  padding: 24px 0 56px;
+}
+
+.sjk-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sjk-copper);
+  margin-bottom: 16px;
+}
+
+.sjk-kicker-rule {
+  width: 24px;
+  height: 1.5px;
+  background: var(--sjk-copper);
+  display: inline-block;
+}
+
+.sjk-hero-title {
+  margin: 0;
+  font-size: clamp(2.25rem, 4.4vw, 3.6rem);
+  font-weight: 800;
+  line-height: 1.07;
+  letter-spacing: -0.03em;
+  color: var(--sjk-ink);
+}
+
+.sjk-hero-title em {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--sjk-forest);
+  font-size: 1.12em;
+  letter-spacing: -0.01em;
+}
+
+.sjk-hero-lead {
+  margin: 20px 0 0;
+  font-size: 16px;
+  line-height: 1.68;
+  color: var(--sjk-ink-soft);
+  max-width: 560px;
+}
+
+.sjk-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.sjk-btn-solid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 22px;
+  border-radius: 8px;
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--sjk-charcoal);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.sjk-btn-solid:hover {
+  background: var(--sjk-forest);
+  border-color: var(--sjk-forest);
+  transform: translateY(-1px);
+}
+
+.sjk-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  border-radius: 8px;
+  background: var(--sjk-surface);
+  color: var(--sjk-ink);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--sjk-rule-strong);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.sjk-btn-outline:hover {
+  border-color: var(--sjk-ink);
+  background: var(--sjk-surface-tint);
+}
+
+.sjk-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--sjk-rule);
+}
+
+.sjk-hero-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sjk-hero-meta-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sjk-muted);
+}
+
+.sjk-hero-meta-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sjk-ink);
+}
+
+/* Architectural Drawing Sheet Card */
+.sjk-blueprint-sheet {
+  background: var(--sjk-surface);
+  border: 1px solid var(--sjk-rule-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(20, 25, 31, 0.08);
+}
+
+.sjk-sheet-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sjk-rule);
+  background: var(--sjk-surface-tint);
+  font-size: 11px;
+  color: var(--sjk-ink-soft);
+}
+
+.sjk-sheet-body {
+  padding: 18px 18px 12px;
+  background: #fbfaf7;
+}
+
+.sjk-sheet-titleblock {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-top: 1px solid var(--sjk-rule);
+  background: var(--sjk-surface);
+}
+
+.sjk-sheet-cell {
+  padding: 10px 14px;
+  border-right: 1px solid var(--sjk-rule);
+}
+
+.sjk-sheet-cell:last-child {
+  border-right: none;
+}
+
+.sjk-sheet-cell-lbl {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sjk-muted);
+  display: block;
+}
+
+.sjk-sheet-cell-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--sjk-ink);
+  display: block;
+  margin-top: 2px;
+}
+
+/* Section Layout */
+.sjk-section {
+  padding: 72px 0;
+  border-bottom: 1px solid var(--sjk-rule);
+}
+
+.sjk-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 34px;
+}
+
+.sjk-section-title {
+  margin: 0;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--sjk-ink);
+  line-height: 1.15;
+}
+
+.sjk-section-sub {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  color: var(--sjk-ink-soft);
+  max-width: 580px;
+}
+
+/* Audience Grid (Homeowners, Surveyors, Contractors, Engineers) */
+.sjk-audience-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--sjk-rule);
+  border-radius: 12px;
+  background: var(--sjk-surface);
+  overflow: hidden;
+}
+
+.sjk-audience-card {
+  position: relative;
+  padding: 24px 22px;
+  border-right: 1px solid var(--sjk-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: background-color 0.25s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sjk-audience-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--sjk-copper);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sjk-audience-card:hover {
+  background-color: #fbfaf7;
+}
+
+.sjk-audience-card:hover::before {
+  transform: scaleX(1);
+}
+
+.sjk-audience-card:last-child {
+  border-right: none;
+}
+
+.sjk-audience-index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sjk-copper);
+  letter-spacing: 0.08em;
+}
+
+.sjk-audience-role {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sjk-forest);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sjk-audience-title {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--sjk-ink);
+  line-height: 1.25;
+}
+
+.sjk-audience-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--sjk-ink-soft);
+  line-height: 1.6;
+}
+
+/* Products Editorial Spec Card */
+.sjk-product-sheet {
+  background: var(--sjk-surface);
+  border: 1px solid var(--sjk-rule-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 14px 36px rgba(20, 25, 31, 0.06);
+}
+
+.sjk-product-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  background: var(--sjk-surface-tint);
+  border-bottom: 1px solid var(--sjk-rule);
+}
+
+.sjk-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sjk-forest-soft);
+  color: var(--sjk-forest);
+  border: 1px solid rgba(25, 71, 58, 0.25);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.sjk-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sjk-forest);
+}
+
+.sjk-product-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr);
+}
+
+.sjk-product-info {
+  padding: 28px;
+  border-right: 1px solid var(--sjk-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sjk-spec-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.sjk-spec-item {
+  padding: 14px;
+  border-radius: 9px;
+  background: var(--sjk-paper);
+  border: 1px solid var(--sjk-rule);
+  transition: border-color 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.2s ease;
+}
+
+.sjk-spec-item:hover {
+  border-color: var(--sjk-forest);
+  background: #ffffff;
+  transform: translateY(-2px);
+}
+
+.sjk-spec-label {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--sjk-ink);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sjk-spec-detail {
+  font-size: 12.5px;
+  color: var(--sjk-ink-soft);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.sjk-product-install {
+  padding: 28px;
+  background: #faf8f4;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sjk-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sjk-device-row {
+  background: var(--sjk-surface);
+  border: 1px solid var(--sjk-rule);
+  border-radius: 10px;
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: border-color 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
+}
+
+.sjk-device-row:hover {
+  border-color: var(--sjk-charcoal);
+  transform: translateX(3px);
+  box-shadow: 0 6px 18px rgba(20, 25, 31, 0.06);
+}
+
+.sjk-device-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sjk-device-btn.solid {
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  border: 1px solid var(--sjk-charcoal);
+}
+
+.sjk-device-btn.solid:hover {
+  background: var(--sjk-forest);
+  border-color: var(--sjk-forest);
+}
+
+.sjk-device-btn.subtle {
+  background: var(--sjk-paper);
+  color: var(--sjk-ink);
+  border: 1px solid var(--sjk-rule-strong);
+}
+
+.sjk-device-btn.subtle:hover {
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  border-color: var(--sjk-charcoal);
+}
+
+/* Future Solutions Strip */
+.sjk-roadmap-box {
+  margin-top: 22px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  border: 1px dashed var(--sjk-rule-strong);
+  background: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* Dark Architectural Manifesto Band */
+.sjk-manifesto-band {
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  padding: 68px 0;
+}
+
+.sjk-pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 32px;
+}
+
+.sjk-pillar {
+  padding-top: 18px;
+  border-top: 1px solid rgba(246, 244, 239, 0.22);
+}
+
+.sjk-pillar-code {
+  font-size: 11px;
+  color: #e08d72;
+  letter-spacing: 0.1em;
+}
+
+.sjk-pillar-title {
+  margin: 8px 0 6px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.sjk-pillar-body {
+  margin: 0;
+  font-size: 13.5px;
+  color: #b8c2cc;
+  line-height: 1.62;
+}
+
+/* Footer */
+.sjk-footer {
+  background: var(--sjk-paper);
+  padding: 28px 0;
+}
+
+.sjk-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--sjk-muted);
+}
+
+/* Light Architectural Modal */
+.sjk-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9900;
+  background: rgba(20, 25, 31, 0.62);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sjk-modal-sheet {
+  width: min(450px, 100%);
+  background: var(--sjk-surface);
+  color: var(--sjk-ink);
+  border: 1px solid var(--sjk-rule-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(20, 25, 31, 0.25);
+}
+
+.sjk-modal-head {
+  padding: 16px 18px;
+  background: var(--sjk-surface-tint);
+  border-bottom: 1px solid var(--sjk-rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sjk-modal-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sjk-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: var(--sjk-paper);
+  border: 1px solid var(--sjk-rule);
+  font-size: 13px;
+  color: var(--sjk-ink-soft);
+  line-height: 1.5;
+}
+
+.sjk-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--sjk-charcoal);
+  color: var(--sjk-paper);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   ARCHITECTURAL MOTION SYSTEM (Refined, Zero Neon)
+   ========================================================= */
+@keyframes sjkFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sjkRuleDraw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes sjkStrokeDraw {
+  from {
+    stroke-dashoffset: var(--sjk-len, 600);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sjkSoftAppear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sjkNodePop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes sjkDotPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes sjkModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Cartoon Builder-at-Work Motion Keyframes */
+@keyframes sjkHammerSwing {
+  0%, 100% {
+    transform: rotate(-32deg);
+  }
+  42% {
+    transform: rotate(-38deg);
+  }
+  58% {
+    transform: rotate(14deg);
+  }
+  72% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes sjkHeadBob {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  58% {
+    transform: translateY(1.2px) rotate(-3deg);
+  }
+  74% {
+    transform: translateY(0px) rotate(1deg);
+  }
+}
+
+@keyframes sjkTapSpark {
+  0%, 52%, 78%, 100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  59% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  70% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+@keyframes sjkCloudDrift {
+  0%, 100% {
+    transform: translateX(0px);
+  }
+  50% {
+    transform: translateX(9px);
+  }
+}
+
+.sjk-worker-arm {
+  transform-box: fill-box;
+  transform-origin: 85% 20%;
+  animation: sjkHammerSwing 1.45s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.sjk-worker-head {
+  transform-box: fill-box;
+  transform-origin: 50% 85%;
+  animation: sjkHeadBob 1.45s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.sjk-tap-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sjkTapSpark 1.45s ease-out infinite;
+}
+
+.sjk-cloud-drift {
+  animation: sjkCloudDrift 7s ease-in-out infinite;
+}
+
+/* Staggered Hero Entrance */
+.sjk-hero-anim {
+  opacity: 0;
+  animation: sjkFadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.sjk-hero-d1 { animation-delay: 0.05s; }
+.sjk-hero-d2 { animation-delay: 0.14s; }
+.sjk-hero-d3 { animation-delay: 0.24s; }
+.sjk-hero-d4 { animation-delay: 0.34s; }
+.sjk-hero-d5 { animation-delay: 0.44s; }
+.sjk-hero-plate-anim {
+  opacity: 0;
+  animation: sjkFadeUp 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.18s forwards;
+}
+
+.sjk-kicker-rule {
+  transform-origin: left;
+  animation: sjkRuleDraw 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+/* Blueprint Technical Pen Line-Draw Classes */
+.sjk-draw {
+  stroke-dasharray: var(--sjk-len, 600);
+  stroke-dashoffset: var(--sjk-len, 600);
+  animation: sjkStrokeDraw var(--sjk-dur, 0.9s) cubic-bezier(0.22, 1, 0.36, 1) var(--sjk-delay, 0.25s) forwards;
+}
+
+.sjk-svg-fade {
+  opacity: 0;
+  animation: sjkSoftAppear 0.55s ease var(--sjk-delay, 0.85s) forwards;
+}
+
+.sjk-svg-node {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sjkNodePop 0.38s cubic-bezier(0.22, 1, 0.36, 1) var(--sjk-delay, 1.05s) forwards;
+}
+
+/* Scroll-Triggered Reveals (driven by IntersectionObserver) */
+.sjk-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--sjk-stagger, 0ms);
+}
+
+.sjk-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Tactile Button Arrow Nudges */
+.sjk-nav-cta svg,
+.sjk-btn-solid svg,
+.sjk-btn-outline svg,
+.sjk-device-btn svg {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sjk-btn-solid:hover svg {
+  transform: translateX(3px);
+}
+
+.sjk-nav-cta:hover svg,
+.sjk-device-btn.solid:hover svg {
+  transform: translate(2px, -2px);
+}
+
+.sjk-status-dot {
+  animation: sjkDotPulse 2.4s ease-in-out infinite;
+}
+
+/* Modal Entrance */
+.sjk-modal-backdrop {
+  animation: sjkSoftAppear 0.2s ease forwards;
+}
+
+.sjk-modal-sheet {
+  animation: sjkModalIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Pillar Accent Rule Hover */
+.sjk-pillar {
+  position: relative;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sjk-pillar:hover {
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .sjk-hero-anim,
+  .sjk-hero-plate-anim,
+  .sjk-kicker-rule,
+  .sjk-draw,
+  .sjk-svg-fade,
+  .sjk-svg-node,
+  .sjk-status-dot,
+  .sjk-modal-backdrop,
+  .sjk-modal-sheet,
+  .sjk-worker-arm,
+  .sjk-worker-head,
+  .sjk-tap-spark,
+  .sjk-cloud-drift,
+  .sjk-tractor-runner,
+  .sjk-tractor-body,
+  .sjk-wheel-spin,
+  .sjk-wheel-spin-fast,
+  .sjk-puff-1,
+  .sjk-puff-2 {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .sjk-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .sjk-hero-grid {
+    grid-template-columns: 1fr;
+    padding: 18px 0 42px;
+    gap: 28px;
+  }
+
+  .sjk-audience-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sjk-audience-card {
+    border-bottom: 1px solid var(--sjk-rule);
+  }
+
+  .sjk-audience-card:nth-child(2n) {
+    border-right: none;
+  }
+
+  .sjk-product-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sjk-product-info {
+    border-right: none;
+    border-bottom: 1px solid var(--sjk-rule);
+  }
+
+  .sjk-pillars-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .sjk-container {
+    padding: 0 16px;
+  }
+
+  .sjk-nav-link {
+    display: none;
+  }
+
+  .sjk-audience-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sjk-audience-card {
+    border-right: none;
+  }
+
+  .sjk-spec-list {
+    grid-template-columns: 1fr;
+  }
+
+  .sjk-product-info,
+  .sjk-product-install {
+    padding: 20px;
+  }
+
+  .sjk-device-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sjk-device-btn {
+    justify-content: center;
+  }
+
+  .sjk-section {
+    padding: 52px 0;
+  }
+}
