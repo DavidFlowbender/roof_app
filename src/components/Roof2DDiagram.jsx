@@ -1058,49 +1058,51 @@ export default function Roof2DDiagram({
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
             gap: '6px',
             padding: '7px 8px',
             background: '#0f172a',
             borderBottom: '1px solid #1e293b',
-            flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button
-              type="button"
-              onClick={() => {
-                if (sketchPts.length >= 3 && !isDrawing) {
-                  pushHistory(makeSnap());
-                  setSketchPts([]);
+          {/* Row 1: Draw / Edit / Examples on left, Pause/Resume on right */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (sketchPts.length >= 3 && !isDrawing) {
+                    pushHistory(makeSnap());
+                    setSketchPts([]);
+                    setIsDrawing(false);
+                    emitPolygonChange(null);
+                  }
+                  setIsSketchPaused(false);
+                  setMode('line_sketch');
+                }}
+                className={`sketch-btn ${mode === 'line_sketch' ? 'active-sketch' : ''}`}
+                style={{ padding: '5px 9px', fontSize: '11.5px' }}
+              >
+                <span>{isDrawing && isSketchPaused ? 'Resume' : 'Draw'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={sketchPts.length < 3}
+                onClick={() => {
                   setIsDrawing(false);
-                  emitPolygonChange(null);
-                }
-                setIsSketchPaused(false);
-                setMode('line_sketch');
-              }}
-              className={`sketch-btn ${mode === 'line_sketch' ? 'active-sketch' : ''}`}
-              style={{ padding: '5px 9px', fontSize: '11.5px' }}
-            >
-              <span>{isDrawing && isSketchPaused ? 'Resume' : 'Draw'}</span>
-            </button>
-            <button
-              type="button"
-              disabled={sketchPts.length < 3}
-              onClick={() => {
-                setIsDrawing(false);
-                setIsSketchPaused(false);
-                setMode('manipulate');
-                if (sketchPts.length >= 3) emitPolygonChange(sketchPts);
-              }}
-              className={`sketch-btn ${mode === 'manipulate' ? 'active-manipulate' : ''}`}
-              style={{ padding: '5px 9px', fontSize: '11.5px', opacity: sketchPts.length < 3 ? 0.45 : 1 }}
-            >
-              <Move className="w-3 h-3" />
-              <span>Edit</span>
-            </button>
-            {renderExamplesDropdown(true)}
+                  setIsSketchPaused(false);
+                  setMode('manipulate');
+                  if (sketchPts.length >= 3) emitPolygonChange(sketchPts);
+                }}
+                className={`sketch-btn ${mode === 'manipulate' ? 'active-manipulate' : ''}`}
+                style={{ padding: '5px 9px', fontSize: '11.5px', opacity: sketchPts.length < 3 ? 0.45 : 1 }}
+              >
+                <Move className="w-3 h-3" />
+                <span>Edit</span>
+              </button>
+              {renderExamplesDropdown(true)}
+            </div>
+
             {mode === 'line_sketch' && isDrawing && sketchPts.length > 0 && (
               <button
                 type="button"
@@ -1115,57 +1117,62 @@ export default function Roof2DDiagram({
                   background: isSketchPaused ? 'rgba(16, 185, 129, 0.18)' : 'rgba(245, 158, 11, 0.14)',
                   color: isSketchPaused ? '#34d399' : '#fbbf24',
                   border: `1px solid ${isSketchPaused ? 'rgba(16, 185, 129, 0.5)' : 'rgba(245, 158, 11, 0.4)'}`,
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {isSketchPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                 <span>{isSketchPaused ? 'Resume' : 'Pause'}</span>
               </button>
             )}
+          </div>
+
+          {/* Row 2: Undo / Redo / Clear on left, Finish Loop prominently on right */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                disabled={!canUndo}
+                onClick={handleUndoPoint}
+                className="sketch-btn-undo"
+                style={{ padding: '5px 7px', fontSize: '11px', opacity: canUndo ? 1 : 0.35 }}
+                title="Undo"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span>Undo</span>
+              </button>
+              <button
+                type="button"
+                disabled={!canRedo}
+                onClick={handleRedoPoint}
+                className="sketch-btn-undo"
+                style={{ padding: '5px 7px', fontSize: '11px', opacity: canRedo ? 1 : 0.35 }}
+                title="Redo"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+                <span>Redo</span>
+              </button>
+              {(sketchPts.length > 0 || hasActiveDesign) && (
+                <button
+                  type="button"
+                  onClick={handleClearSketch}
+                  className="sketch-btn-trash"
+                  style={{ padding: '5px 6px' }}
+                  title="Clear to Blank Canvas"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
             {mode === 'line_sketch' && isDrawing && sketchPts.length >= 3 && (
               <button
                 type="button"
                 onClick={handleCloseLoop}
                 className="sketch-btn-finish"
-                style={{ padding: '5px 8px', fontSize: '11px' }}
+                style={{ padding: '5px 11px', fontSize: '11.5px', whiteSpace: 'nowrap' }}
               >
-                <Check className="w-3 h-3" />
-                <span>Finish</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button
-              type="button"
-              disabled={!canUndo}
-              onClick={handleUndoPoint}
-              className="sketch-btn-undo"
-              style={{ padding: '5px 8px', fontSize: '11px', opacity: canUndo ? 1 : 0.35 }}
-              title="Undo"
-            >
-              <Undo2 className="w-3.5 h-3.5" />
-              <span>Undo</span>
-            </button>
-            <button
-              type="button"
-              disabled={!canRedo}
-              onClick={handleRedoPoint}
-              className="sketch-btn-undo"
-              style={{ padding: '5px 8px', fontSize: '11px', opacity: canRedo ? 1 : 0.35 }}
-              title="Redo"
-            >
-              <Redo2 className="w-3.5 h-3.5" />
-              <span>Redo</span>
-            </button>
-            {(sketchPts.length > 0 || hasActiveDesign) && (
-              <button
-                type="button"
-                onClick={handleClearSketch}
-                className="sketch-btn-trash"
-                style={{ padding: '5px 7px' }}
-                title="Clear to Blank Canvas"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Check className="w-3.5 h-3.5" />
+                <span>Finish Loop</span>
               </button>
             )}
           </div>
