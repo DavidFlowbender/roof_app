@@ -32,6 +32,8 @@ import { BUILDING_STAGES } from '../utils/stagePresets';
 import { getUserInitials, getUserDisplayName } from '../utils/proSession';
 import Roof2DDiagram from './Roof2DDiagram';
 import Roof3DViewer from './Roof3DViewer';
+import LevelInfoButton from './LevelInfoButton';
+import CompanyInfoEditor from './CompanyInfoEditor';
 
 export default function MobileWorkspace({
   geometry,
@@ -60,7 +62,7 @@ export default function MobileWorkspace({
   setCustomPrices,
   wastePercentage = 10,
   setWastePercentage = null,
-  buildingStage = 'woodwork',
+  buildingStage = 'foundation',
   handleStageSelect = null,
   parapetConfig = null,
   woodworkConfig,
@@ -77,6 +79,12 @@ export default function MobileWorkspace({
   setQuoteScope,
   handleCopyWcSummary,
   isPremium: externalIsPremium,
+  priceSyncStatus = 'idle',
+  contractorInfo = null,
+  setContractorInfo = null,
+  onUploadContractorLogo = null,
+  logoUploadError = '',
+  setLogoUploadError = null,
   onOpenProModal = null,
   onOpenAdminModal = null,
   onInstallApp = null,
@@ -95,8 +103,8 @@ export default function MobileWorkspace({
   // Demo / lifted Pro unlock state
   const [localIsPremium, setLocalIsPremium] = useState(false);
   const isPremium = externalIsPremium !== undefined ? externalIsPremium : localIsPremium;
-  // Toggle inside Set Prices page: 'roof' | 'wc' | 'wood'
-  const [priceCategory, setPriceCategory] = useState('roof');
+  // Toggle inside Company Info & Prices page: 'company' | 'roof' | 'wc' | 'wood'
+  const [priceCategory, setPriceCategory] = useState('company');
   // Sub-page toggles: Roof ('2d' | 'view' | 'quote'), WC & Woodwork ('view' | 'quote')
   const [roofSubPage, setRoofSubPage] = useState('2d');
   const [wcSubPage, setWcSubPage] = useState('view');
@@ -175,42 +183,44 @@ export default function MobileWorkspace({
     [parapetConfig, hasParapetStage]
   );
 
+  const activeCustomPrices = isPremium ? customPrices : {};
+
   // Full materials (including timber) so Roof Quote & Wood Quote always have live data
   const fullMaterials = useMemo(() => {
     return estimateMaterials(
       geometry,
       selectedMaterial,
       currencyCode,
-      customPrices,
+      activeCustomPrices,
       {
         buildingStage: 'woodwork',
         parapetConfig: mobileParapetConfig,
         woodworkConfig: { ...(woodworkConfig || {}), includeTimberBOQ: true },
       }
     );
-  }, [geometry, selectedMaterial, currencyCode, customPrices, woodworkConfig, mobileParapetConfig]);
+  }, [geometry, selectedMaterial, currencyCode, activeCustomPrices, woodworkConfig, mobileParapetConfig]);
 
   // Keep zeroed items visible inside Set Prices so users can adjust or re-enable any item
   const editableMaterials = useMemo(
     () =>
-      estimateMaterials(geometry, selectedMaterial, currencyCode, customPrices, {
+      estimateMaterials(geometry, selectedMaterial, currencyCode, activeCustomPrices, {
         buildingStage: 'woodwork',
         parapetConfig: mobileParapetConfig,
         woodworkConfig: { ...(woodworkConfig || {}), includeTimberBOQ: true },
         includeZeroItems: true,
       }),
-    [geometry, selectedMaterial, currencyCode, customPrices, woodworkConfig, mobileParapetConfig]
+    [geometry, selectedMaterial, currencyCode, activeCustomPrices, woodworkConfig, mobileParapetConfig]
   );
 
   const editableWcMaterials = useMemo(
     () =>
-      estimateWaterCollector(geometry, currencyCode, customPrices, {
+      estimateWaterCollector(geometry, currencyCode, activeCustomPrices, {
         roofType,
         polygonVertices,
         wcConfig,
         includeZeroItems: true,
       }),
-    [geometry, currencyCode, customPrices, roofType, polygonVertices, wcConfig]
+    [geometry, currencyCode, activeCustomPrices, roofType, polygonVertices, wcConfig]
   );
 
   const activeWcMaterials = wcMaterials || editableWcMaterials;
@@ -245,7 +255,7 @@ export default function MobileWorkspace({
     { id: 'roof', label: 'Roof Plan & Quote', icon: Layers },
     { id: 'wc', label: 'WC (Water Collector)', icon: Droplets, pro: true },
     { id: 'wood', label: 'Woodwork (3D & Quote)', icon: Hammer, pro: true },
-    { id: 'prices', label: 'Set Prices (Materials / Labour / Transport)', icon: DollarSign },
+    { id: 'prices', label: 'Company Info & Prices', icon: DollarSign, pro: true },
   ];
 
   const renderSubPageSwitcher = (subPage, setSubPage, viewLabel, quoteLabel, QuoteIcon, showQuoteCrown = false) => (
@@ -587,7 +597,6 @@ export default function MobileWorkspace({
                 >
                   <div>
                     <div style={{ fontWeight: 600, color: '#e2e8f0' }}>Labour &amp; Installation</div>
-                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>{geometry?.totalArea || 0} m²</div>
                   </div>
                   <div style={{ fontWeight: 700, color: '#cbd5e1' }}>
                     {formatCurrency(laborTotal, currencyCode)}
@@ -610,12 +619,53 @@ export default function MobileWorkspace({
                 >
                   <div>
                     <div style={{ fontWeight: 600, color: '#e2e8f0' }}>Transport &amp; Logistics</div>
-                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>1 trip</div>
                   </div>
                   <div style={{ fontWeight: 700, color: '#cbd5e1' }}>
                     {formatCurrency(transportTotal, currencyCode)}
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* Generic Market Price Disclaimer */}
+            <div
+              style={{
+                flexShrink: 0,
+                fontSize: '10px',
+                color: '#94a3b8',
+                lineHeight: 1.35,
+                padding: '5px 8px',
+                borderRadius: '8px',
+                background: 'rgba(15, 23, 42, 0.7)',
+                border: '1px solid #1e293b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '6px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <span>
+                <strong>Note:</strong> Prices shown are generic estimates and may not reflect actual market prices.
+                {!isPremium && ' You can edit prices & add items at PDF export (not saved).'}
+              </span>
+              {!isPremium && onOpenProModal && (
+                <button
+                  type="button"
+                  onClick={onOpenProModal}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    color: '#fbbf24',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  See Pro benefits →
+                </button>
               )}
             </div>
 
@@ -645,7 +695,7 @@ export default function MobileWorkspace({
               <button
                 type="button"
                 onClick={() => {
-                  if (setQuoteScope) setQuoteScope('roof');
+                  if (setQuoteScope) setQuoteScope(isRoofQuote ? 'roof_only' : 'wood');
                   setQuoteModalOpen(true);
                 }}
                 style={{
@@ -779,7 +829,7 @@ export default function MobileWorkspace({
                   ? woodSubPage === 'view'
                     ? '• Wood 3D'
                     : '• Wood Quote'
-                  : '• Set Prices'}
+                  : '• Company & Prices'}
                 </span>
               </div>
             </div>
@@ -1171,6 +1221,7 @@ export default function MobileWorkspace({
                       <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0 }}>
                         Level:
                       </span>
+                      <LevelInfoButton size={18} />
                       <div style={{ display: 'flex', gap: '5px', flex: 1 }}>
                         {BUILDING_STAGES.map((stg) => {
                           const active = buildingStage === stg.id;
@@ -1199,7 +1250,7 @@ export default function MobileWorkspace({
                     </div>
                   )}
 
-                  {/* Foundation Eaves (+0.5m each side, editable) vs Parapet/Woodwork (+0m exact) */}
+                  {/* Foundation Parapet Allowance (+0.5m per side, editable) vs Parapet Level (+0m exact) */}
                   <div
                     style={{
                       flexShrink: 0,
@@ -1217,7 +1268,7 @@ export default function MobileWorkspace({
                     {buildingStage === 'foundation' ? (
                       <>
                         <span style={{ color: '#94a3b8', fontWeight: 600 }}>
-                          Eaves (+both sides):
+                          Parapet allowance (+per side):
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <button
@@ -1285,10 +1336,8 @@ export default function MobileWorkspace({
                         </div>
                       </>
                     ) : (
-                      <span style={{ color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24', fontWeight: 700 }}>
-                        {buildingStage === 'parapet'
-                          ? 'Parapet Level: Drawn base dimensions stay exact (+0m)'
-                          : 'Woodwork Level: Base dimensions stay exact (+0m)'}
+                      <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                        Parapet Level: Measured at parapet/woodwork — dimensions stay exact (+0m)
                       </span>
                     )}
                   </div>
@@ -1314,6 +1363,8 @@ export default function MobileWorkspace({
                       woodworkConfig={woodworkConfig}
                       sketchUnderlayImage={sketchUnderlayImage}
                       mobileInteractive={true}
+                      wastePercentage={wastePercentage}
+                      setWastePercentage={setWastePercentage}
                     />
                   </div>
                 </>
@@ -2130,9 +2181,6 @@ export default function MobileWorkspace({
                       >
                         <div>
                           <div style={{ fontWeight: 600, color: '#e2e8f0' }}>WC Installation Labour</div>
-                          <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                            {activeWcMaterials.summary.laborUnits}m total run
-                          </div>
                         </div>
                         <div style={{ fontWeight: 700, color: '#cbd5e1' }}>
                           {formatCurrency(activeWcMaterials.summary.laborTotal, currencyCode)}
@@ -2154,13 +2202,28 @@ export default function MobileWorkspace({
                       >
                         <div>
                           <div style={{ fontWeight: 600, color: '#e2e8f0' }}>WC Transport &amp; Logistics</div>
-                          <div style={{ fontSize: '10.5px', color: '#64748b' }}>1 trip</div>
                         </div>
                         <div style={{ fontWeight: 700, color: '#cbd5e1' }}>
                           {formatCurrency(activeWcMaterials.summary.transportTotal, currencyCode)}
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Generic Market Price Disclaimer */}
+                  <div
+                    style={{
+                      flexShrink: 0,
+                      fontSize: '10px',
+                      color: '#94a3b8',
+                      lineHeight: 1.35,
+                      padding: '5px 8px',
+                      borderRadius: '8px',
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      border: '1px solid #1e293b',
+                    }}
+                  >
+                    <strong>Note:</strong> Default prices shown are generic estimates and may not reflect actual market prices.
                   </div>
 
                   {/* Pinned WC Export Actions */}
@@ -2216,9 +2279,72 @@ export default function MobileWorkspace({
             </div>
           )}
 
-          {/* PAGE: SET PRICES (MATERIALS, LABOUR, TRANSPORT) */}
+          {/* PAGE: COMPANY INFO & MATERIAL PRICES (PRO-ONLY — SET ONCE PER ACCOUNT) */}
           {activePage === 'prices' && (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {!isPremium ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '22px',
+                    gap: '10px',
+                    background: 'linear-gradient(160deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.95))',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '14px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '50px',
+                      height: '50px',
+                      borderRadius: '50%',
+                      background: 'rgba(245, 158, 11, 0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div style={{ fontSize: '15.5px', fontWeight: 800, color: '#fef3c7' }}>
+                    Company Info &amp; Material Prices — Pro Feature
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#cbd5e1', margin: 0, lineHeight: 1.55 }}>
+                    Upgrade to <strong>RoofCalc Pro</strong> to upload your <strong>company logo</strong>, set your
+                    contractor name &amp; phone for exported PDFs, and save your custom Roof, WC &amp; Woodwork
+                    material prices permanently to your account.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => (onOpenProModal ? onOpenProModal() : setLocalIsPremium(true))}
+                    style={{
+                      marginTop: '6px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 18px',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Crown className="w-4 h-4" />
+                    <span>Unlock RoofCalc Pro</span>
+                  </button>
+                </div>
+              ) : (
+                <>
               <div
                 style={{
                   flexShrink: 0,
@@ -2232,10 +2358,21 @@ export default function MobileWorkspace({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 800 }}>Set Prices ({currencyCode})</div>
-                  <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>Auto-saved • Set 0 to hide item in BOQ</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800 }}>Company Info &amp; Prices ({currencyCode})</div>
+                  <div
+                    style={{
+                      fontSize: '10.5px',
+                      color: priceSyncStatus === 'saved' ? '#34d399' : '#94a3b8',
+                    }}
+                  >
+                    {priceSyncStatus === 'saving'
+                      ? 'Saving to your Pro account...'
+                      : priceSyncStatus === 'error'
+                      ? 'Saved on device • Cloud sync pending'
+                      : '✓ Saved permanently to your Pro account'}
+                  </div>
                 </div>
-                {Object.keys(customPrices || {}).length > 0 && (
+                {priceCategory !== 'company' && Object.keys(customPrices || {}).length > 0 && (
                   <button
                     type="button"
                     onClick={() => setCustomPrices({})}
@@ -2250,7 +2387,7 @@ export default function MobileWorkspace({
                       cursor: 'pointer',
                     }}
                   >
-                    Reset Defaults
+                    Reset Prices
                   </button>
                 )}
               </div>
@@ -2259,13 +2396,29 @@ export default function MobileWorkspace({
                 style={{
                   flexShrink: 0,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 1fr',
-                  gap: '5px',
+                  gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                  gap: '4px',
                   background: '#111827',
                   padding: '4px',
                   borderRadius: '10px',
                 }}
               >
+                <button
+                  type="button"
+                  onClick={() => setPriceCategory('company')}
+                  style={{
+                    padding: '7px 4px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: priceCategory === 'company' ? '#6366f1' : 'transparent',
+                    color: priceCategory === 'company' ? '#ffffff' : '#94a3b8',
+                  }}
+                >
+                  Company
+                </button>
                 <button
                   type="button"
                   onClick={() => setPriceCategory('roof')}
@@ -2280,7 +2433,7 @@ export default function MobileWorkspace({
                     color: priceCategory === 'roof' ? '#052e16' : '#94a3b8',
                   }}
                 >
-                  Roof Rates
+                  Roof
                 </button>
                 <button
                   type="button"
@@ -2294,14 +2447,9 @@ export default function MobileWorkspace({
                     cursor: 'pointer',
                     background: priceCategory === 'wc' ? '#0ea5e9' : 'transparent',
                     color: priceCategory === 'wc' ? '#ffffff' : '#94a3b8',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '3px',
                   }}
                 >
-                  <span>WC Rates</span>
-                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
+                  WC
                 </button>
                 <button
                   type="button"
@@ -2315,78 +2463,23 @@ export default function MobileWorkspace({
                     cursor: 'pointer',
                     background: priceCategory === 'wood' ? '#f59e0b' : 'transparent',
                     color: priceCategory === 'wood' ? '#0f172a' : '#94a3b8',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '3px',
                   }}
                 >
-                  <span>Wood Rates</span>
-                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
+                  Wood
                 </button>
               </div>
 
-              {!isPremium && (priceCategory === 'wc' || priceCategory === 'wood') ? (
-                <div
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textAlign: 'center',
-                    padding: '20px',
-                    gap: '10px',
-                    background: 'linear-gradient(160deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.95))',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    borderRadius: '14px',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      background: 'rgba(245, 158, 11, 0.18)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fbbf24',
-                    }}
-                  >
-                    <Lock className="w-5 h-5" />
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#fef3c7' }}>
-                    {priceCategory === 'wc' ? 'WC Rates — RoofCalc Pro' : 'Woodwork Rates — RoofCalc Pro'}
-                  </div>
-                  <p style={{ fontSize: '12px', color: '#cbd5e1', margin: 0, lineHeight: 1.5 }}>
-                    Sign in with a RoofCalc Pro account to configure custom {priceCategory === 'wc' ? 'Water Collector' : 'Woodwork & Timber'} material rates and quotations.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => (onOpenProModal ? onOpenProModal() : setLocalIsPremium(true))}
-                    style={{
-                      marginTop: '4px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                      color: '#0f172a',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '10px 16px',
-                      fontSize: '12.5px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Crown className="w-4 h-4" />
-                    <span>Unlock RoofCalc Pro</span>
-                  </button>
-                </div>
-              ) : (
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {priceCategory === 'company' && (
+                  <CompanyInfoEditor
+                    contractorInfo={contractorInfo}
+                    setContractorInfo={setContractorInfo}
+                    onUploadLogo={onUploadContractorLogo}
+                    logoUploadError={logoUploadError}
+                    setLogoUploadError={setLogoUploadError}
+                    compact={true}
+                  />
+                )}
                 {priceCategory === 'roof' && (
                   <div style={{ display: 'grid', gridTemplateColumns: setWastePercentage ? '1fr 1fr 82px' : '1fr 1fr', gap: '6px' }}>
                     <label
@@ -2515,6 +2608,8 @@ export default function MobileWorkspace({
                   </div>
                 )}
 
+                {priceCategory !== 'company' && (
+                <>
                 {(priceCategory === 'wc'
                   ? (editableWcMaterials?.items || []).filter((it) => !it.isCustom)
                   : (editableMaterials?.items || []).filter((it) =>
@@ -2536,7 +2631,34 @@ export default function MobileWorkspace({
                         fontSize: '12px',
                       }}
                     >
-                      <span style={{ color: '#e2e8f0', fontWeight: 600, flex: 1 }}>{it.name}</span>
+                      <input
+                        type="text"
+                        aria-label={`Rename ${it.defaultName || it.name}`}
+                        placeholder={it.defaultName || it.name}
+                        value={
+                          customPrices?.__customNames?.[it.id] !== undefined
+                            ? customPrices.__customNames[it.id]
+                            : it.name
+                        }
+                        onChange={(e) => {
+                          const nextNames = {
+                            ...(customPrices?.__customNames || {}),
+                            [it.id]: e.target.value,
+                          };
+                          setCustomPrices({ ...(customPrices || {}), __customNames: nextNames });
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: '#090e1a',
+                          color: '#e2e8f0',
+                          border: '1px solid #263244',
+                          borderRadius: '6px',
+                          padding: '5px 8px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                        }}
+                      />
                       <input
                         type="number"
                         min="0"
@@ -2769,8 +2891,9 @@ export default function MobileWorkspace({
                     </button>
                   </div>
                 </form>
+                </>
+                )}
               </div>
-              )}
 
               <button
                 type="button"
@@ -2800,6 +2923,8 @@ export default function MobileWorkspace({
               >
                 Done — View Quotation
               </button>
+              </>
+              )}
             </div>
           )}
         </main>

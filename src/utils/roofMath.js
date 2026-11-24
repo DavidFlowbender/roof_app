@@ -10,8 +10,8 @@ import { buildRoofSkeleton } from './roofSkeleton.js';
 export const ROOF_TYPES = [
   { id: 'hip', name: 'Hip Roof', desc: 'Slopes down on all four sides with hips and ridge' },
   { id: 'gable', name: 'Gable Roof', desc: 'Classic two-pitch slope with triangular end walls' },
-  { id: 'shed', name: 'Shed / Mono-Pitch', desc: 'Single sloping plane, ideal for modern extensions & lean-tos' },
-  { id: 'gambrel', name: 'Gambrel Roof', desc: 'Two-sided symmetrical roof with two slopes on each side' },
+  { id: 'shed', name: 'Shed / Mono-Pitch', desc: 'Single sloping plane, ideal for modern homes & extensions' },
+  { id: 'flat', name: 'Flat Roof', desc: 'Modern low-slope flat roof deck (concealed or slab finish)' },
 ];
 
 export const PITCH_PRESETS = [
@@ -266,7 +266,7 @@ export function getEffectiveSlopeRun(breadth, overhang = 0.4, roofType = 'hip', 
   const effB = polySpan !== null
     ? b + (ov.front + ov.back + ov.left + ov.right) / 2
     : b + ov.front + ov.back;
-  return roofType === 'shed' ? effB : effB / 2;
+  return roofType === 'shed' || roofType === 'flat' ? effB : effB / 2;
 }
 
 /**
@@ -280,6 +280,14 @@ export function calculateSlantingHeightFromKingpost(
   polygonVertices = null
 ) {
   const run = getEffectiveSlopeRun(breadth, overhang, roofType, polygonVertices);
+  if (roofType === 'flat') {
+    return {
+      slantingHeight: round(run, 2),
+      kingpostHeight: 0,
+      pitchDegrees: 2.0,
+      run: round(run, 2),
+    };
+  }
   const kp = Math.max(0.05, Number(kingpostH) || 0.05);
 
   let slantingH = Math.hypot(run, kp);
@@ -388,6 +396,9 @@ export function calculateRoofHeight(
 ) {
   // Slope run puts into consideration the added overhang / parapet drip lap
   const run = getEffectiveSlopeRun(breadth, overhang, roofType, polygonVertices);
+  if (roofType === 'flat') {
+    return 0.15;
+  }
 
   if (pitchMode === 'height') {
     return Math.max(0, Number(pitchValue) || 0);
@@ -461,13 +472,13 @@ export function calculateRoofGeometry({
       totalRake: 0,
       rafterLength: round(rafterLength, 2),
       slantingHeight: round(rafterLength, 2),
-      kingpostHeight: round(skeleton.maxKingpost || H, 2),
+      kingpostHeight: round(skeleton.maxKingpost ?? H, 2),
       pitchDegrees: round(pitchDegrees, 1),
-      roofHeight: round(skeleton.maxKingpost || H, 2),
+      roofHeight: round(skeleton.maxKingpost ?? H, 2),
       buildingDimensions: {
         length: L,
         breadth: B,
-        height: round(skeleton.maxKingpost || H, 2),
+        height: round(skeleton.maxKingpost ?? H, 2),
         overhang: ov,
         effectiveLength: round(L + ov.left + ov.right, 2),
         effectiveBreadth: round(B + ov.front + ov.back, 2),
@@ -549,6 +560,16 @@ export function calculateRoofGeometry({
     totalArea = effL * rafterLength;
     totalGutter = 0;
     totalRake = 2 * rafterLength;
+
+  } else if (roofType === 'flat') {
+    H = 0;
+    rafterLength = effB;
+    pitchDegrees = 2.0;
+    topRidgeLength = 0;
+    totalRidge = 0;
+    totalArea = effL * effB;
+    totalGutter = 0;
+    totalRake = 0;
 
   } else if (roofType === 'gambrel') {
     const halfB = effB / 2;

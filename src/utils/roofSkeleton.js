@@ -424,6 +424,65 @@ function solveStraightSkeleton(rawPoly, tanPitch) {
 }
 
 /**
+ * Clean 2D ear-clipping triangulator for any simple polygon (convex or concave: L-shape, T-shape, Cross, etc.)
+ */
+function triangulateSimplePolygon2D(poly) {
+  if (!Array.isArray(poly) || poly.length < 3) return [];
+  const pts = poly.map((p) => ({ x: p.x, y: p.y }));
+  const ccw = signedArea2D(pts) >= 0;
+  const indices = pts.map((_, i) => i);
+  const tris = [];
+
+  const pointInTri = (p, a, b, c) => {
+    const c1 = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    const c2 = (c.x - b.x) * (p.y - b.y) - (c.y - b.y) * (p.x - b.x);
+    const c3 = (a.x - c.x) * (p.y - c.y) - (a.y - c.y) * (p.x - c.x);
+    const hasNeg = c1 < -1e-6 || c2 < -1e-6 || c3 < -1e-6;
+    const hasPos = c1 > 1e-6 || c2 > 1e-6 || c3 > 1e-6;
+    return !(hasNeg && hasPos);
+  };
+
+  let guard = 0;
+  while (indices.length > 3 && guard < 2000) {
+    guard++;
+    let earFound = false;
+    const m = indices.length;
+    for (let i = 0; i < m; i++) {
+      const iPrev = indices[(i - 1 + m) % m];
+      const iCurr = indices[i];
+      const iNext = indices[(i + 1) % m];
+      const a = pts[iPrev];
+      const b = pts[iCurr];
+      const c = pts[iNext];
+      const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+      const isConvex = ccw ? cross > 1e-6 : cross < -1e-6;
+      if (!isConvex) continue;
+
+      let containsAny = false;
+      for (let j = 0; j < m; j++) {
+        const idx = indices[j];
+        if (idx === iPrev || idx === iCurr || idx === iNext) continue;
+        if (pointInTri(pts[idx], a, b, c)) {
+          containsAny = true;
+          break;
+        }
+      }
+      if (!containsAny) {
+        tris.push([a, b, c]);
+        indices.splice(i, 1);
+        earFound = true;
+        break;
+      }
+    }
+    if (!earFound) break;
+  }
+  if (indices.length === 3) {
+    tris.push([pts[indices[0]], pts[indices[1]], pts[indices[2]]]);
+  }
+  return tris;
+}
+
+/**
  * Builds the complete 3D & 2D Roof Skeleton for any footprint
  */
 export function buildRoofSkeleton(polygonVertices, overhang = 0.45, pitchDegrees = 45.0, roofType = 'hip') {
@@ -433,29 +492,247 @@ export function buildRoofSkeleton(polygonVertices, overhang = 0.45, pitchDegrees
   const tanPitch = Math.tan(rad);
 
   if (!polygonVertices || polygonVertices.length < 3) {
-    return buildRectangleSkeleton(12, 8, avgOv, tanPitch, pitchDegrees, roofType);
+    return buildRectangleSkeleton(12, 8, avgOv, tanPitch, pitchDegrees, roofType, 0, 0);
   }
 
   // 1. Clean collinear clicks & get safe eave boundary polygon
   const cleanedWalls = simplifyPolygon(polygonVertices, 0.08);
   const eavePoly = getSafeEavePolygon(cleanedWalls, avgOv);
 
-  // If 4-corner axis-aligned rectangle AND roofType is non-hip (gable/shed/gambrel), use fast rect builder
-  if (cleanedWalls.length === 4 && roofType !== 'hip') {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    cleanedWalls.forEach((p) => {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    });
-    return buildRectangleSkeleton(maxX - minX, maxY - minY, avgOv, tanPitch, pitchDegrees, roofType);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  eavePoly.forEach((p) => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  });
+  const spanX = Math.max(0.2, maxX - minX);
+  const spanY = Math.max(0.2, maxY - minY);
+  const eaveCenterX = (minX + maxX) / 2;
+  const eaveCenterY = (minY + maxY) / 2;
+
+  // FLAT ROOF (Works cleanly for ANY rectangle or custom polygon!)
+  if (roofType === 'flat') {
+    const flatTris2D = triangulateSimplePolygon2D(eavePoly);
+    const triangles = flatTris2D.map(([a, b, c]) => [
+      { x: a.x, y: a.y, z: 0.06 },
+      { x: b.x, y: b.y, z: 0.06 },
+      { x: c.x, y: c.y, z: 0.06 },
+    ]);
+    let totalArea = 0;
+    triangles.forEach((t) => (totalArea += triArea3D(t[0], t[1], t[2])));
+    return {
+      skeletonType: cleanedWalls.length === 4 ? 'rectangle' : 'custom_polygon',
+      eavePolygon: eavePoly,
+      sections: [
+        {
+          name: 'Flat Roof Deck',
+          span: round2(Math.min(spanX, spanY)),
+          length: round2(Math.max(spanX, spanY)),
+          kingpostHeight: 0,
+          pitchDegrees: 2.0,
+          ridge: null,
+        },
+      ],
+      ridges: [],
+      hips: [],
+      valleys: [],
+      infillWalls: [],
+      triangles,
+      totalRidgeLength: 0,
+      totalHipLength: 0,
+      totalValleyLength: 0,
+      totalRoofArea: round2(totalArea),
+      maxKingpost: 0,
+    };
   }
 
-  // 2. Run Exact Straight Skeleton Solver on Eave Boundary
+  // SHED / MONO-PITCH ROOF (Centered directly on eavePoly — fixes shifted roof anomaly on ALL polygons!)
+  if (roofType === 'shed') {
+    // Slope across the shorter horizontal span so mono-pitch rises naturally
+    const slopeAlongY = spanX >= spanY;
+    const slopeSpan = slopeAlongY ? spanY : spanX;
+    const rise = round2(Math.max(0.2, slopeSpan * tanPitch));
+
+    const getShedZ = (pt) => {
+      const frac = slopeAlongY
+        ? (maxY - pt.y) / slopeSpan // high at back (minY), low at front (maxY)
+        : (maxX - pt.x) / slopeSpan; // high at left (minX), low at right (maxX)
+      return Math.max(0, Math.min(rise, frac * rise));
+    };
+
+    const flatTris2D = triangulateSimplePolygon2D(eavePoly);
+    const triangles = flatTris2D.map(([a, b, c]) => [
+      { x: a.x, y: a.y, z: getShedZ(a) },
+      { x: b.x, y: b.y, z: getShedZ(b) },
+      { x: c.x, y: c.y, z: getShedZ(c) },
+    ]);
+
+    // Build solid vertical wall infills around the wall perimeter up to the mono-pitch plane
+    const infillWalls = [];
+    for (let i = 0; i < cleanedWalls.length; i++) {
+      const a = cleanedWalls[i];
+      const b = cleanedWalls[(i + 1) % cleanedWalls.length];
+      const za = getShedZ(a);
+      const zb = getShedZ(b);
+      if (za > 0.02 || zb > 0.02) {
+        const aBot = { x: a.x, y: a.y, z: 0 };
+        const bBot = { x: b.x, y: b.y, z: 0 };
+        const aTop = { x: a.x, y: a.y, z: za };
+        const bTop = { x: b.x, y: b.y, z: zb };
+        if (za > 0.02) infillWalls.push([aBot, bBot, aTop]);
+        if (zb > 0.02) infillWalls.push([bBot, bTop, aTop]);
+      }
+    }
+
+    const highP1 = slopeAlongY
+      ? { x: minX, y: minY, z: rise }
+      : { x: minX, y: minY, z: rise };
+    const highP2 = slopeAlongY
+      ? { x: maxX, y: minY, z: rise }
+      : { x: minX, y: maxY, z: rise };
+    const highLen = round2(dist3D(highP1, highP2));
+
+    let totalArea = 0;
+    triangles.forEach((t) => (totalArea += triArea3D(t[0], t[1], t[2])));
+
+    return {
+      skeletonType: cleanedWalls.length === 4 ? 'rectangle' : 'custom_polygon',
+      eavePolygon: eavePoly,
+      sections: [
+        {
+          name: 'Shed / Mono-Pitch',
+          span: round2(slopeSpan),
+          length: highLen,
+          kingpostHeight: rise,
+          pitchDegrees,
+          ridge: { p1: highP1, p2: highP2 },
+        },
+      ],
+      ridges: [
+        {
+          p1: highP1,
+          p2: highP2,
+          length: highLen,
+          kingpostHeight: rise,
+          isMain: true,
+          isFlat: true,
+          label: `High Edge (KP=${rise}m)`,
+        },
+      ],
+      hips: [],
+      valleys: [],
+      infillWalls,
+      triangles,
+      totalRidgeLength: highLen,
+      totalHipLength: 0,
+      totalValleyLength: 0,
+      totalRoofArea: round2(totalArea),
+      maxKingpost: rise,
+    };
+  }
+
+  // GABLE ROOF on 4-corner drawn rectangle (keeps true centered coordinates + solid triangular end walls!)
+  if (cleanedWalls.length === 4 && roofType === 'gable') {
+    const ridgeAlongX = spanX >= spanY;
+    const halfSpan = (ridgeAlongX ? spanY : spanX) / 2;
+    const kp = round2(Math.max(0.2, halfSpan * tanPitch));
+
+    const pBL = { x: minX, y: minY, z: 0 };
+    const pBR = { x: maxX, y: minY, z: 0 };
+    const pFR = { x: maxX, y: maxY, z: 0 };
+    const pFL = { x: minX, y: maxY, z: 0 };
+
+    let r1, r2, triangles, infillWalls;
+    if (ridgeAlongX) {
+      r1 = { x: minX, y: eaveCenterY, z: kp };
+      r2 = { x: maxX, y: eaveCenterY, z: kp };
+      triangles = [
+        [pBL, pBR, r2],
+        [pBL, r2, r1],
+        [pFL, r2, pFR],
+        [pFL, r1, r2],
+      ];
+      // Gable triangular end walls on left & right walls
+      let wMinX = Infinity, wMaxX = -Infinity, wMinY = Infinity, wMaxY = -Infinity;
+      cleanedWalls.forEach((p) => {
+        if (p.x < wMinX) wMinX = p.x;
+        if (p.x > wMaxX) wMaxX = p.x;
+        if (p.y < wMinY) wMinY = p.y;
+        if (p.y > wMaxY) wMaxY = p.y;
+      });
+      const wCy = (wMinY + wMaxY) / 2;
+      infillWalls = [
+        [{ x: wMinX, y: wMinY, z: 0 }, { x: wMinX, y: wMaxY, z: 0 }, { x: wMinX, y: wCy, z: kp }],
+        [{ x: wMaxX, y: wMinY, z: 0 }, { x: wMaxX, y: wMaxY, z: 0 }, { x: wMaxX, y: wCy, z: kp }],
+      ];
+    } else {
+      r1 = { x: eaveCenterX, y: minY, z: kp };
+      r2 = { x: eaveCenterX, y: maxY, z: kp };
+      triangles = [
+        [pBL, r2, pFL],
+        [pBL, r1, r2],
+        [pBR, pFR, r2],
+        [pBR, r2, r1],
+      ];
+      let wMinX = Infinity, wMaxX = -Infinity, wMinY = Infinity, wMaxY = -Infinity;
+      cleanedWalls.forEach((p) => {
+        if (p.x < wMinX) wMinX = p.x;
+        if (p.x > wMaxX) wMaxX = p.x;
+        if (p.y < wMinY) wMinY = p.y;
+        if (p.y > wMaxY) wMaxY = p.y;
+      });
+      const wCx = (wMinX + wMaxX) / 2;
+      infillWalls = [
+        [{ x: wMinX, y: wMinY, z: 0 }, { x: wMaxX, y: wMinY, z: 0 }, { x: wCx, y: wMinY, z: kp }],
+        [{ x: wMinX, y: wMaxY, z: 0 }, { x: wMaxX, y: wMaxY, z: 0 }, { x: wCx, y: wMaxY, z: kp }],
+      ];
+    }
+
+    const ridgeLen = round2(dist3D(r1, r2));
+    let totalArea = 0;
+    triangles.forEach((t) => (totalArea += triArea3D(t[0], t[1], t[2])));
+
+    return {
+      skeletonType: 'rectangle',
+      eavePolygon: eavePoly,
+      sections: [
+        {
+          name: 'Main Gable Roof',
+          span: round2(Math.min(spanX, spanY)),
+          length: ridgeLen,
+          kingpostHeight: kp,
+          pitchDegrees,
+          ridge: { p1: r1, p2: r2 },
+        },
+      ],
+      ridges: [
+        {
+          p1: r1,
+          p2: r2,
+          length: ridgeLen,
+          kingpostHeight: kp,
+          isMain: true,
+          isFlat: true,
+          label: `Main Ridge (KP=${kp}m)`,
+        },
+      ],
+      hips: [],
+      valleys: [],
+      infillWalls,
+      triangles,
+      totalRidgeLength: ridgeLen,
+      totalHipLength: 0,
+      totalValleyLength: 0,
+      totalRoofArea: round2(totalArea),
+      maxKingpost: kp,
+    };
+  }
+
+  // 2. Run Exact Straight Skeleton Solver on Eave Boundary (Hip & Complex Multi-Wing Polygons)
   const solved = solveStraightSkeleton(eavePoly, tanPitch);
   if (!solved || solved.triangles.length === 0) {
-    return buildRectangleSkeleton(12, 8, avgOv, tanPitch, pitchDegrees, roofType);
+    return buildRectangleSkeleton(spanX, spanY, 0, tanPitch, pitchDegrees, roofType, eaveCenterX, eaveCenterY);
   }
 
   const maxZ = solved.triangles.reduce(
@@ -566,7 +843,7 @@ export function buildRoofSkeleton(polygonVertices, overhang = 0.45, pitchDegrees
 /**
  * Standard Rectangle Skeleton (single ridge, 4 hips)
  */
-function buildRectangleSkeleton(length = 12, breadth = 8, avgOv = 0.45, tanPitch = 1.0, pitchDegrees = 45.0, _roofType = 'hip') {
+function buildRectangleSkeleton(length = 12, breadth = 8, avgOv = 0.45, tanPitch = 1.0, pitchDegrees = 45.0, _roofType = 'hip', centerX = 0, centerY = 0) {
   const L = length;
   const B = breadth;
   const effL = L + 2 * avgOv;
@@ -575,13 +852,13 @@ function buildRectangleSkeleton(length = 12, breadth = 8, avgOv = 0.45, tanPitch
   const kp = round2(r * tanPitch);
   const ridgeLen = Math.max(0, effL - effB);
 
-  const p0 = { x: -effL / 2, y: -effB / 2, z: 0 };
-  const p1 = { x: effL / 2, y: -effB / 2, z: 0 };
-  const p2 = { x: effL / 2, y: effB / 2, z: 0 };
-  const p3 = { x: -effL / 2, y: effB / 2, z: 0 };
+  const p0 = { x: centerX - effL / 2, y: centerY - effB / 2, z: 0 };
+  const p1 = { x: centerX + effL / 2, y: centerY - effB / 2, z: 0 };
+  const p2 = { x: centerX + effL / 2, y: centerY + effB / 2, z: 0 };
+  const p3 = { x: centerX - effL / 2, y: centerY + effB / 2, z: 0 };
 
-  const r1 = { x: -ridgeLen / 2, y: 0, z: kp };
-  const r2 = { x: ridgeLen / 2, y: 0, z: kp };
+  const r1 = { x: centerX - ridgeLen / 2, y: centerY, z: kp };
+  const r2 = { x: centerX + ridgeLen / 2, y: centerY, z: kp };
 
   const ridges = ridgeLen > 0.01 ? [{ p1: r1, p2: r2, label: `Main Ridge (KP=${kp}m)`, length: round2(ridgeLen), isMain: true }] : [];
   const hips = [

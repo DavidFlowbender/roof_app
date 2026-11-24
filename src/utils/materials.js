@@ -74,8 +74,6 @@ export function estimateMaterials(
   const profile = MATERIAL_PROFILES.find((p) => p.id === selectedProfileId) || MATERIAL_PROFILES[0];
   const area = geometry.totalArea || 0;
   const ridge = geometry.totalRidge || 0;
-  const gutter = geometry.totalGutter || 0;
-  const hasGutters = typeof gutter === 'number' && gutter > 0;
 
   const {
     buildingStage = 'foundation',
@@ -96,14 +94,10 @@ export function estimateMaterials(
   // 2. Ridge Caps / Hip Liners
   const ridgeCapQty = Math.ceil(ridge / ACCESSORY_DEFAULTS.ridgeCapLengthM);
 
-  // 3. Gutters & Downspouts
-  const gutterSections = hasGutters ? Math.ceil(gutter / ACCESSORY_DEFAULTS.gutterSectionLengthM) : 0;
-  const downspouts = hasGutters ? Math.max(1, Math.ceil(gutter / ACCESSORY_DEFAULTS.downspoutIntervalM)) : 0;
-
-  // 4. Underlayment Rolls (roof felt / breathable membrane)
+  // 3. Underlayment Rolls (roof felt / breathable membrane)
   const underlaymentRolls = Math.ceil(area / ACCESSORY_DEFAULTS.underlaymentRollM2);
 
-  // 5. Fasteners / Screws
+  // 4. Fasteners / Screws
   const totalScrews = Math.ceil(area * ACCESSORY_DEFAULTS.screwsPerM2);
   const screwBoxes = Math.ceil(totalScrews / ACCESSORY_DEFAULTS.screwsPerBox);
 
@@ -122,20 +116,6 @@ export function estimateMaterials(
     USD: 4.5,
     GBP: 3.5,
     EUR: 4.0,
-  });
-
-  const gutterPrice = getPrice('gutter', {
-    NGN: 8500, // per 3m section
-    USD: 16.0,
-    GBP: 12.5,
-    EUR: 14.5,
-  });
-
-  const downspoutPrice = getPrice('downspout', {
-    NGN: 6000,
-    USD: 12.0,
-    GBP: 9.5,
-    EUR: 11.0,
   });
 
   const underlaymentPrice = getPrice('underlayment', {
@@ -196,7 +176,6 @@ export function estimateMaterials(
   // Calculate Subtotals for Covering
   const primaryCost = primaryQuantity * primaryUnitPrice;
   const ridgeCapCost = ridgeCapQty * ridgeCapPrice;
-  const gutterCost = gutterSections * gutterPrice + downspouts * downspoutPrice;
   const underlaymentCost = underlaymentRolls * underlaymentPrice;
   const screwsCost = screwBoxes * screwBoxPrice;
 
@@ -231,44 +210,16 @@ export function estimateMaterials(
       unitPrice: sealantPrice,
       total: sealantQty * sealantPrice,
     },
-    ...(hasGutters
-      ? [
-          {
-            id: 'gutter',
-            category: 'Drainage & Eaves',
-            name: 'Gutter Profiles (3m sections)',
-            spec: `${gutter} m eave run + fascia brackets`,
-            quantity: gutterSections,
-            unit: 'sections',
-            unitPrice: gutterPrice,
-            total: gutterSections * gutterPrice,
-          },
-          {
-            id: 'downspout',
-            category: 'Drainage & Eaves',
-            name: 'Downspout Pipes & Elbows',
-            spec: `Complete with discharge shoes`,
-            quantity: downspouts,
-            unit: 'sets',
-            unitPrice: downspoutPrice,
-            total: downspouts * downspoutPrice,
-          },
-        ]
-      : []),
-    ...(!hasParapet
-      ? [
-          {
-            id: 'fasciaBoard',
-            category: 'Eaves & Trims',
-            name: 'Fascia Board (No Parapet)',
-            spec: `${perimeter}m eave perimeter (~3.6m per length)`,
-            quantity: fasciaBoardQty,
-            unit: 'lengths',
-            unitPrice: fasciaBoardPrice,
-            total: fasciaBoardQty * fasciaBoardPrice,
-          },
-        ]
-      : []),
+    {
+      id: 'fasciaBoard',
+      category: 'Eaves & Trims',
+      name: 'Fascia Board',
+      spec: `${perimeter}m eave perimeter (~3.6m per length)`,
+      quantity: fasciaBoardQty,
+      unit: 'lengths',
+      unitPrice: fasciaBoardPrice,
+      total: fasciaBoardQty * fasciaBoardPrice,
+    },
     {
       id: 'underlayment',
       category: 'Moisture Barrier',
@@ -321,42 +272,9 @@ export function estimateMaterials(
     },
   ];
 
-  // ==========================================
-  // PARAPET LEVEL ITEMS
-  // ==========================================
+  // Measurement level (Foundation vs Parapet) only determines whether +0.5m parapet allowance
+  // is added to wall dimensions — both levels share the same clean Roof Covering BOQ items.
   const parapetItems = [];
-
-  if (hasParapet) {
-    // 1. Concrete Parapet / Roof Junction Flashing & Sealant
-    const flashingPrice = getPrice('parapetFlashing', { NGN: 2400, USD: 3.5, GBP: 2.8, EUR: 3.2 });
-    const flashingQty = Math.ceil(perimeter);
-    parapetItems.push({
-      id: 'parapetFlashing',
-      category: 'Parapet Sealing',
-      name: 'Parapet Roof-Edge Flashing & Sealant',
-      spec: `Protective eave/drip flashing along ${perimeter}m outward concrete parapet edge`,
-      quantity: flashingQty,
-      unit: 'm',
-      unitPrice: flashingPrice,
-      total: flashingQty * flashingPrice,
-    });
-
-    // 2. Concrete Parapet Edge Trim / Capping
-    if (parapetConfig?.includeCoping !== false) {
-      const copingPrice = getPrice('parapetCoping', { NGN: 3500, USD: 5.0, GBP: 4.0, EUR: 4.6 });
-      const copingQty = Math.ceil(perimeter);
-      parapetItems.push({
-        id: 'parapetCoping',
-        category: 'Parapet Trims',
-        name: 'Concrete Parapet Fascia Drip Edge & Trim',
-        spec: `Metal drip trim along ${perimeter}m outward concrete parapet ledge`,
-        quantity: copingQty,
-        unit: 'm',
-        unitPrice: copingPrice,
-        total: copingQty * copingPrice,
-      });
-    }
-  }
 
   // ==========================================
   // WOODWORK / TIMBER CARCASS BOQ ITEMS
@@ -531,8 +449,21 @@ export function estimateMaterials(
           })
       : [];
 
+  // Apply user-defined material name overrides (`customPrices.__customNames`), preserving defaultName
+  const customNames =
+    customPrices?.__customNames && typeof customPrices.__customNames === 'object'
+      ? customPrices.__customNames
+      : {};
+
   // Combine all items & hide any zero-amount or zero-quantity rows from the BOQ
-  const rawItems = [...baseItems, ...parapetItems, ...customRoofItems, ...timberItems, ...customWoodItems];
+  const rawItems = [...baseItems, ...parapetItems, ...customRoofItems, ...timberItems, ...customWoodItems].map(
+    (it) => {
+      if (it.isCustom) return { ...it, defaultName: it.name };
+      const override = customNames[it.id];
+      const renamed = typeof override === 'string' && override.trim() ? override.trim() : it.name;
+      return { ...it, defaultName: it.name, name: renamed };
+    }
+  );
   const allItems = includeZeroItems
     ? rawItems.filter((it) => Number(it.quantity) > 0 || it.isCustom)
     : rawItems.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);

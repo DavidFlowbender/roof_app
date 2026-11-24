@@ -1165,6 +1165,45 @@ export default function Roof3DViewer({
         roofMesh.receiveShadow = true;
         modelGroup.add(roofMesh);
 
+        // Render solid infill walls (Shed raised back/side walls & Gable triangular end walls)
+        if (Array.isArray(polySkeleton?.infillWalls) && polySkeleton.infillWalls.length > 0) {
+          const infillVerts = [];
+          polySkeleton.infillWalls.forEach((tri) => {
+            const a = new THREE.Vector3(tri[0].x - cX, polyRoofBaseY + (tri[0].z || 0), tri[0].y - cZ);
+            const b = new THREE.Vector3(tri[1].x - cX, polyRoofBaseY + (tri[1].z || 0), tri[1].y - cZ);
+            const c = new THREE.Vector3(tri[2].x - cX, polyRoofBaseY + (tri[2].z || 0), tri[2].y - cZ);
+            infillVerts.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+          });
+          const infillGeom = new THREE.BufferGeometry();
+          infillGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(infillVerts), 3));
+          infillGeom.computeVertexNormals();
+          const infillMat = gableInfillMaterial.clone();
+          infillMat.side = THREE.DoubleSide;
+          const infillMesh = new THREE.Mesh(infillGeom, infillMat);
+          infillMesh.castShadow = true;
+          infillMesh.receiveShadow = true;
+          modelGroup.add(infillMesh);
+        }
+
+        // Flat roof architectural perimeter coping / fascia trim for custom polygons
+        if (roofType === 'flat' && Array.isArray(polySkeleton?.eavePolygon) && polySkeleton.eavePolygon.length >= 3) {
+          const ep = polySkeleton.eavePolygon;
+          const copingMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.45, metalness: 0.3 });
+          for (let i = 0; i < ep.length; i++) {
+            const p1 = new THREE.Vector3(ep[i].x - cX, polyRoofBaseY + 0.14, ep[i].y - cZ);
+            const p2 = new THREE.Vector3(ep[(i + 1) % ep.length].x - cX, polyRoofBaseY + 0.14, ep[(i + 1) % ep.length].y - cZ);
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            const len = dir.length();
+            if (len > 0.05) {
+              const trim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, len + 0.14), copingMat);
+              trim.position.copy(new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5));
+              trim.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir.clone().normalize());
+              trim.castShadow = true;
+              modelGroup.add(trim);
+            }
+          }
+        }
+
         // Sleek Ridge Caps on top of ridges and hips (raised slightly by +0.035m so no z-fighting!)
         polySkeleton?.ridges?.forEach((r) => {
           const p1 = new THREE.Vector3(r.p1.x - cX, polyRoofBaseY + (r.p1.z || 0) + 0.035, r.p1.y - cZ);
@@ -1923,6 +1962,29 @@ export default function Roof3DViewer({
           );
         }
 
+      } else if (roofType === 'flat') {
+        // Flat Roof Timber Joists & Cross Battens
+        const nJoists = Math.max(3, Math.ceil(effL / trussSpacing));
+        const jStep = effL / nJoists;
+        const upVec = new THREE.Vector3(0, 1, 0);
+        for (let i = 0; i <= nJoists; i++) {
+          const jx = xMin + i * jStep;
+          addTimberBeam(
+            new THREE.Vector3(jx, roofBaseY + 0.02, zBack + 0.05),
+            new THREE.Vector3(jx, roofBaseY + 0.02, zFront - 0.05),
+            rafterWidth, rafterDepth, rafterTimberMat, upVec
+          );
+        }
+        const nBattens = Math.max(3, Math.round(effB / purlinSpacing));
+        for (let b = 0; b <= nBattens; b++) {
+          const bz = zBack + (effB * b) / nBattens;
+          addTimberBeam(
+            new THREE.Vector3(xMin + 0.04, roofBaseY + 0.09, bz),
+            new THREE.Vector3(xMax - 0.04, roofBaseY + 0.09, bz),
+            purlinWidth, purlinThick, purlinTimberMat, upVec
+          );
+        }
+
       } else if (roofType === 'gambrel') {
         const breakY = roofBaseY + H * 0.65;
         const peakY = roofBaseY + H;
@@ -2336,6 +2398,31 @@ export default function Roof3DViewer({
       lowGutter.rotation.z = Math.PI / 2;
       lowGutter.position.set(roofCenterX, lowY, zFront + 0.05);
       modelGroup.add(lowGutter);
+
+    } else if (roofType === 'flat') {
+      // Architectural Flat Roof Deck with perimeter parapet fascia coping
+      const deckH = 0.14;
+      if (isCoveringActive) {
+        const flatDeck = new THREE.Mesh(new THREE.BoxGeometry(effL, deckH, effB), roofMaterial);
+        flatDeck.position.set(roofCenterX, roofBaseY + deckH / 2, roofCenterZ);
+        flatDeck.castShadow = true;
+        flatDeck.receiveShadow = true;
+        modelGroup.add(flatDeck);
+      }
+      // Raised perimeter fascia/coping rim around the flat deck
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.45, metalness: 0.3 });
+      const rimH = 0.26;
+      const rimT = 0.16;
+      const rimY = roofBaseY + rimH / 2;
+      const frontRim = new THREE.Mesh(new THREE.BoxGeometry(effL + rimT, rimH, rimT), rimMat);
+      frontRim.position.set(roofCenterX, rimY, zFront);
+      const backRim = new THREE.Mesh(new THREE.BoxGeometry(effL + rimT, rimH, rimT), rimMat);
+      backRim.position.set(roofCenterX, rimY, zBack);
+      const leftRim = new THREE.Mesh(new THREE.BoxGeometry(rimT, rimH, effB + rimT), rimMat);
+      leftRim.position.set(xMin, rimY, roofCenterZ);
+      const rightRim = new THREE.Mesh(new THREE.BoxGeometry(rimT, rimH, effB + rimT), rimMat);
+      rightRim.position.set(xMax, rimY, roofCenterZ);
+      modelGroup.add(frontRim, backRim, leftRim, rightRim);
 
     } else if (roofType === 'gambrel') {
       // Gambrel (Dutch Barn) Roof

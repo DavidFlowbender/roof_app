@@ -35,29 +35,85 @@ export async function generateQuotePDF({
   doc.setFillColor(...accentColor);
   doc.rect(0, 31, pageWidth, 1.5, 'F');
 
-  // S "S" Logo Badge in Banner
-  doc.setFillColor(...accentColor);
-  doc.roundedRect(margin, 9, 14, 14, 3, 3, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text('S', margin + 7, 18.8, { align: 'center' });
+  // Logo in Banner: Custom Uploaded Logo (if provided) or default Sijitek "S" Badge
+  const customLogoUrl =
+    typeof contractorInfo.logoDataUrl === 'string' &&
+    contractorInfo.logoDataUrl.startsWith('data:image/')
+      ? contractorInfo.logoDataUrl
+      : '';
+  let titleOffsetX = margin + 18;
+
+  if (customLogoUrl) {
+    try {
+      const imgProps = doc.getImageProperties(customLogoUrl);
+      const rawW = Number(imgProps?.width) || 1;
+      const rawH = Number(imgProps?.height) || 1;
+      const ratio = rawW / rawH;
+      const maxH = 14;
+      const maxW = 28;
+      let drawW = maxH * ratio;
+      let drawH = maxH;
+      if (drawW > maxW) {
+        drawW = maxW;
+        drawH = maxW / ratio;
+      }
+      const pad = 1.6;
+      const boxW = Math.max(14, drawW + pad * 2);
+      const boxH = 16;
+      const boxY = 8;
+
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(margin, boxY, boxW, boxH, 2.5, 2.5, 'F');
+      const imgFormat = customLogoUrl.startsWith('data:image/jpeg') || customLogoUrl.startsWith('data:image/jpg') ? 'JPEG' : 'PNG';
+      const imgX = margin + (boxW - drawW) / 2;
+      const imgY = boxY + (boxH - drawH) / 2;
+      doc.addImage(customLogoUrl, imgFormat, imgX, imgY, drawW, drawH);
+      titleOffsetX = margin + boxW + 4.5;
+    } catch {
+      // Fallback to default "S" badge if logo image cannot be decoded
+      doc.setFillColor(...accentColor);
+      doc.roundedRect(margin, 9, 14, 14, 3, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(15);
+      doc.text('S', margin + 7, 18.8, { align: 'center' });
+    }
+  } else {
+    doc.setFillColor(...accentColor);
+    doc.roundedRect(margin, 9, 14, 14, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.text('S', margin + 7, 18.8, { align: 'center' });
+  }
 
   // Title in Banner
   const isWcQuote = materials?.buildingStage === 'wc';
+  const isWoodQuote = materials?.buildingStage === 'woodwork_only';
+  const bannerBrand = (contractorInfo.name || '').trim() || 'Sijitek Solutions';
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(17);
-  doc.text(isWcQuote ? 'WATER COLLECTOR QUOTATION (WC)' : 'OFFICIAL ROOFING QUOTATION', margin + 18, 15.5);
+  doc.setFontSize(titleOffsetX > margin + 26 ? 14.5 : 16.5);
+  doc.text(
+    isWcQuote
+      ? 'WATER COLLECTOR QUOTATION (WC)'
+      : isWoodQuote
+      ? 'WOODWORK & TIMBER QUOTATION'
+      : 'OFFICIAL ROOFING QUOTATION',
+    titleOffsetX,
+    15.5
+  );
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.8);
+  doc.setFontSize(8.5);
   doc.setTextColor(203, 213, 225);
   doc.text(
     isWcQuote
-      ? 'Sijitek Solutions • Rainwater Gutters, Miters & Downspout Specification'
-      : 'Sijitek Solutions • Bill of Quantities & Material Specification',
-    margin + 18,
+      ? `${bannerBrand} • Rainwater Gutters, Miters & Downspout Specification`
+      : isWoodQuote
+      ? `${bannerBrand} • Roof Carcass, Timber Trusses & Woodwork BOQ`
+      : `${bannerBrand} • Bill of Quantities & Roofing Covering Specification`,
+    titleOffsetX,
     22.5
   );
 
@@ -96,9 +152,9 @@ export async function generateQuotePDF({
 
   const stageLabel =
     materials.buildingStage === 'wc' ? (materials.profile?.name || 'Water Collector System') :
-    materials.buildingStage === 'foundation' ? 'Foundation Level (Presets Applied)' :
-    materials.buildingStage === 'parapet' ? 'Parapet Level (Flashing & Trough)' :
-    materials.buildingStage === 'woodwork' ? 'Woodwork Level (Measured Carcass)' : 'Standard';
+    materials.buildingStage === 'woodwork_only' ? 'Woodwork & Timber Carcass BOQ' :
+    materials.buildingStage === 'foundation' ? 'Foundation Level (+Parapet Allowance)' :
+    materials.buildingStage === 'parapet' ? 'Parapet Level (Exact Measured)' : 'Standard';
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
@@ -154,10 +210,16 @@ export async function generateQuotePDF({
 
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...textMuted);
-  doc.text(`Ridges & Gutters:`, margin + 4 + colW * 3, currentY + 13);
+  doc.text(isWcQuote ? `Collector Gutter Run:` : `Ridge & Hip Length:`, margin + 4 + colW * 3, currentY + 13);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...textDark);
-  doc.text(`R: ${formatLength(geometry.totalRidge, unitSystem)} | G: ${formatLength(geometry.totalGutter, unitSystem)}`, margin + 4 + colW * 3, currentY + 18);
+  doc.text(
+    isWcQuote
+      ? `${formatLength(materials?.analysis?.activeGutterM || geometry.totalGutter, unitSystem)} (${materials?.analysis?.dropCount || 0} drops)`
+      : `${formatLength(geometry.totalRidge, unitSystem)}`,
+    margin + 4 + colW * 3,
+    currentY + 18
+  );
 
   currentY += 32;
 
@@ -248,8 +310,8 @@ export async function generateQuotePDF({
     doc.setFont('helvetica', 'bold');
     doc.text('Skilled Roofing Installation & Workmanship', colPositions[1].x, currentY + 4.6);
     doc.setFont('helvetica', 'normal');
-    doc.text(String(geometry.totalArea), colPositions[2].x, currentY + 4.6);
-    doc.text('m²', colPositions[3].x, currentY + 4.6);
+    doc.text('-', colPositions[2].x, currentY + 4.6);
+    doc.text('-', colPositions[3].x, currentY + 4.6);
     doc.text('-', colPositions[4].x, currentY + 4.6);
     doc.text(formatCurrency(materials.summary.laborTotal, materials.currencyCode), colPositions[5].x, currentY + 4.6);
     currentY += rowHeight;
@@ -269,8 +331,8 @@ export async function generateQuotePDF({
     doc.setFont('helvetica', 'bold');
     doc.text('Transport & Site Logistics', colPositions[1].x, currentY + 4.6);
     doc.setFont('helvetica', 'normal');
-    doc.text('1', colPositions[2].x, currentY + 4.6);
-    doc.text('trip', colPositions[3].x, currentY + 4.6);
+    doc.text('-', colPositions[2].x, currentY + 4.6);
+    doc.text('-', colPositions[3].x, currentY + 4.6);
     doc.text('-', colPositions[4].x, currentY + 4.6);
     doc.text(formatCurrency(materials.summary.transportTotal, materials.currencyCode), colPositions[5].x, currentY + 4.6);
     currentY += rowHeight;
@@ -331,9 +393,10 @@ export async function generateQuotePDF({
   doc.setTextColor(...textMuted);
   doc.text('1. Quantities include waste allowance. Any on-site changes to roof height or overhang will adjust final quantities.', margin, currentY + 5);
   doc.text('2. Payment Terms: 70% advance on material procurement, 30% upon completion of roofing installation.', margin, currentY + 9);
+  doc.text('3. Disclaimer: Generic reference prices may not reflect actual current local market prices unless updated by contractor.', margin, currentY + 13);
 
   // Signature Lines
-  currentY += 18;
+  currentY += 21;
   doc.setDrawColor(148, 163, 184);
   doc.line(margin, currentY, margin + 55, currentY);
   doc.line(rightColX, currentY, rightColX + 55, currentY);
@@ -349,6 +412,11 @@ export async function generateQuotePDF({
   doc.text('Generated by RoofCalc Pro — Powered by Sijitek Solutions', pageWidth / 2, pageHeight - 8, { align: 'center' });
 
   // Save the PDF
-  const filename = `Roof_Quotation_${(clientInfo.name || 'Estimate').replace(/\s+/g, '_')}_${quoteRef}.pdf`;
+  const quotePrefix = isWcQuote
+    ? 'Water_Collector_Quotation'
+    : isWoodQuote
+    ? 'Woodwork_Quotation'
+    : 'Roof_Quotation';
+  const filename = `${quotePrefix}_${(clientInfo.name || 'Estimate').replace(/\s+/g, '_')}_${quoteRef}.pdf`;
   doc.save(filename);
 }

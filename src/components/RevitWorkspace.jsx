@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight,
   Box,
+  Building2,
   Calculator,
   Camera,
   ChevronDown,
@@ -32,6 +33,8 @@ import { getUserInitials, getUserDisplayName, isAdminEmail } from '../utils/proS
 import Roof3DViewer from './Roof3DViewer';
 import Roof2DDiagram from './Roof2DDiagram';
 import MobileWorkspace from './MobileWorkspace';
+import LevelInfoButton from './LevelInfoButton';
+import CompanyInfoEditor from './CompanyInfoEditor';
 
 export default function RevitWorkspace({
   geometry,
@@ -91,6 +94,12 @@ export default function RevitWorkspace({
   setQuoteScope,
   handleCopyWcSummary,
   isPremium = false,
+  priceSyncStatus = 'idle',
+  contractorInfo = null,
+  setContractorInfo = null,
+  onUploadContractorLogo = null,
+  logoUploadError = '',
+  setLogoUploadError = null,
   onOpenProModal = null,
   onOpenAdminModal = null,
   onInstallApp = null,
@@ -220,6 +229,12 @@ export default function RevitWorkspace({
         setQuoteScope={setQuoteScope}
         handleCopyWcSummary={handleCopyWcSummary}
         isPremium={isPremium}
+        priceSyncStatus={priceSyncStatus}
+        contractorInfo={contractorInfo}
+        setContractorInfo={setContractorInfo}
+        onUploadContractorLogo={onUploadContractorLogo}
+        logoUploadError={logoUploadError}
+        setLogoUploadError={setLogoUploadError}
         onOpenProModal={onOpenProModal}
         onOpenAdminModal={onOpenAdminModal}
         onInstallApp={onInstallApp}
@@ -329,6 +344,27 @@ export default function RevitWorkspace({
                 : 'PRO'}
             </span>
           </button>
+
+          <button
+            type="button"
+            className={`studio-nav-tab ${mainTab === 'company' ? 'active' : ''}`}
+            onClick={() => setMainTab('company')}
+            title="Company Info, PDF Logo & Permanent Pro Branding"
+          >
+            <Building2 className="w-4 h-4 text-indigo-400" />
+            <span>4. Company Info</span>
+            {!isPremium && (
+              <span
+                className="studio-cost-pill"
+                style={{
+                  background: 'rgba(245, 158, 11, 0.16)',
+                  color: '#fbbf24',
+                }}
+              >
+                PRO
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Compact Global Settings */}
@@ -376,19 +412,6 @@ export default function RevitWorkspace({
             >
               <Crown className="w-3.5 h-3.5" />
               <span>{isPremium ? 'Pro Active' : 'Go Pro'}</span>
-            </button>
-          )}
-
-          {onInstallApp && (
-            <button
-              type="button"
-              className="studio-ghost-btn"
-              onClick={onInstallApp}
-              title="Install RoofCalc Pro App"
-              style={{ borderColor: 'rgba(16, 185, 129, 0.45)', color: '#34d399' }}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Install App</span>
             </button>
           )}
 
@@ -664,9 +687,12 @@ export default function RevitWorkspace({
       {/* 2. SLIM ESSENTIALS BAR (ONLY IN DESIGN VIEW) */}
       {mainTab === 'design' && (
         <section className="studio-controls-bar" aria-label="Roof Quick Settings">
-          {/* Building Stage */}
+          {/* Building Level */}
           <div className="studio-control-group">
-            <span className="studio-control-label">Stage</span>
+            <span className="studio-control-label" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span>Level</span>
+              <LevelInfoButton size={15} />
+            </span>
             <div className="studio-segmented">
               {BUILDING_STAGES.map((stg) => (
                 <button
@@ -746,9 +772,9 @@ export default function RevitWorkspace({
           {buildingStage === 'foundation' ? (
             <div
               className="studio-control-group"
-              title="Foundation level automatically adds this overhang on both sides (editable, e.g. 0.5m or 0.6m)"
+              title="Foundation level: automatically adds editable parapet/eaves allowance per side (default 0.5m) for the parapet that will be installed later"
             >
-              <span className="studio-control-label">Eaves (+/side)</span>
+              <span className="studio-control-label">Parapet (+/side)</span>
               <div className="studio-stepper" style={{ gap: '3px' }}>
                 <button
                   type="button"
@@ -816,14 +842,14 @@ export default function RevitWorkspace({
           ) : (
             <div
               className="studio-control-group"
-              title="Parapet & Woodwork base dimensions stay exact (+0m added)"
+              title="Parapet / Woodwork level: base dimensions stay exact (+0m added)"
             >
               <span className="studio-control-label">Base</span>
               <span
                 style={{
                   fontSize: '11.5px',
                   fontWeight: 700,
-                  color: buildingStage === 'parapet' ? '#38bdf8' : '#fbbf24',
+                  color: '#38bdf8',
                   background: 'rgba(15, 23, 42, 0.7)',
                   border: '1px solid #334155',
                   borderRadius: '7px',
@@ -1066,39 +1092,37 @@ export default function RevitWorkspace({
             </div>
           )}
 
-          {buildingStage === 'woodwork' && (
-            <>
-              <div className="studio-drawer-item">
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <span>Include Timber BOQ</span>
-                  {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
-                </label>
-                <input
-                  type="checkbox"
-                  checked={isPremium && woodworkConfig.includeTimberBOQ}
-                  onChange={(e) => {
-                    if (!isPremium) {
-                      onOpenProModal?.();
-                      return;
-                    }
-                    setWoodworkConfig({ ...woodworkConfig, includeTimberBOQ: e.target.checked });
-                  }}
-                />
-              </div>
-              <div className="studio-drawer-item">
-                <label>Truss Spacing</label>
-                <select
-                  value={woodworkConfig.trussSpacing}
-                  onChange={(e) =>
-                    setWoodworkConfig({ ...woodworkConfig, trussSpacing: Number(e.target.value) })
-                  }
-                >
-                  <option value={1.0}>1.0 m</option>
-                  <option value={1.2}>1.2 m (Std)</option>
-                  <option value={1.5}>1.5 m</option>
-                </select>
-              </div>
-            </>
+          <div className="studio-drawer-item">
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span>Include Timber BOQ</span>
+              {!isPremium && <Crown className="w-3 h-3 text-amber-400" />}
+            </label>
+            <input
+              type="checkbox"
+              checked={isPremium && woodworkConfig.includeTimberBOQ}
+              onChange={(e) => {
+                if (!isPremium) {
+                  onOpenProModal?.();
+                  return;
+                }
+                setWoodworkConfig({ ...woodworkConfig, includeTimberBOQ: e.target.checked });
+              }}
+            />
+          </div>
+          {isPremium && woodworkConfig.includeTimberBOQ && (
+            <div className="studio-drawer-item">
+              <label>Truss Spacing</label>
+              <select
+                value={woodworkConfig.trussSpacing}
+                onChange={(e) =>
+                  setWoodworkConfig({ ...woodworkConfig, trussSpacing: Number(e.target.value) })
+                }
+              >
+                <option value={1.0}>1.0 m</option>
+                <option value={1.2}>1.2 m (Std)</option>
+                <option value={1.5}>1.5 m</option>
+              </select>
+            </div>
           )}
 
           <button
@@ -1143,6 +1167,8 @@ export default function RevitWorkspace({
                   woodworkConfig={woodworkConfig}
                   sketchUnderlayImage={sketchUnderlayImage}
                   onClearUnderlay={() => setSketchUnderlayImage(null)}
+                  wastePercentage={wastePercentage}
+                  setWastePercentage={setWastePercentage}
                 />
               </div>
             )}
@@ -1366,11 +1392,17 @@ export default function RevitWorkspace({
                       />
                     </label>
                   )}
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    Set any price to 0 to hide it from the BOQ • Auto-saved
+                  <span style={{ fontSize: '11px', color: isPremium && priceSyncStatus === 'saved' ? '#34d399' : '#64748b' }}>
+                    {isPremium
+                      ? priceSyncStatus === 'saving'
+                        ? 'Saving prices to your Pro account...'
+                        : priceSyncStatus === 'error'
+                        ? 'Saved locally • Cloud sync retrying on next edit'
+                        : '✓ Prices saved permanently to your Pro account • Set 0 to hide item'
+                      : 'Default market prices shown • Upgrade to Pro to edit prices & company branding'}
                   </span>
                 </div>
-                {Object.keys(customPrices || {}).length > 0 && (
+                {isPremium && Object.keys(customPrices || {}).length > 0 && (
                   <button
                     type="button"
                     onClick={() => setCustomPrices({})}
@@ -1454,7 +1486,55 @@ export default function RevitWorkspace({
                         <td style={{ color: '#64748b' }}>{idx + 1}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <span className="boq-item-title">{item.name}</span>
+                            {isPremium ? (
+                              <input
+                                type="text"
+                                aria-label={`Edit name for ${item.defaultName || item.name}`}
+                                placeholder={item.defaultName || item.name}
+                                value={
+                                  item.isCustom
+                                    ? item.name
+                                    : customPrices?.__customNames?.[item.id] !== undefined
+                                    ? customPrices.__customNames[item.id]
+                                    : item.name
+                                }
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (item.isCustom) {
+                                    const prevList = Array.isArray(customPrices?.__extraItems)
+                                      ? customPrices.__extraItems
+                                      : [];
+                                    setCustomPrices({
+                                      ...(customPrices || {}),
+                                      __extraItems: prevList.map((ci) =>
+                                        ci.id === item.id ? { ...ci, name: val } : ci
+                                      ),
+                                    });
+                                  } else {
+                                    setCustomPrices({
+                                      ...(customPrices || {}),
+                                      __customNames: {
+                                        ...(customPrices?.__customNames || {}),
+                                        [item.id]: val,
+                                      },
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  flex: '1 1 200px',
+                                  minWidth: '150px',
+                                  background: 'rgba(15, 23, 42, 0.55)',
+                                  color: '#f8fafc',
+                                  border: '1px solid rgba(51, 65, 85, 0.75)',
+                                  borderRadius: '6px',
+                                  padding: '3px 8px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 700,
+                                }}
+                              />
+                            ) : (
+                              <span className="boq-item-title">{item.name}</span>
+                            )}
                             {item.category && (
                               <span
                                 style={{
@@ -1488,27 +1568,44 @@ export default function RevitWorkspace({
                         <td className="boq-qty">{item.quantity.toLocaleString()}</td>
                         <td>{item.unit}</td>
                         <td>
-                          <input
-                            type="number"
-                            className="boq-price-input"
-                            style={{
-                              width: '90px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              background: 'rgba(15, 23, 42, 0.6)',
-                            }}
-                            value={
-                              customPrices[item.id] !== undefined
-                                ? customPrices[item.id]
-                                : item.unitPrice
-                            }
-                            onChange={(e) =>
-                              setCustomPrices({
-                                ...customPrices,
-                                [item.id]: e.target.value,
-                              })
-                            }
-                          />
+                          {isPremium ? (
+                            <input
+                              type="number"
+                              className="boq-price-input"
+                              style={{
+                                width: '90px',
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                background: 'rgba(15, 23, 42, 0.6)',
+                              }}
+                              value={
+                                customPrices[item.id] !== undefined
+                                  ? customPrices[item.id]
+                                  : item.unitPrice
+                              }
+                              onChange={(e) =>
+                                setCustomPrices({
+                                  ...customPrices,
+                                  [item.id]: e.target.value,
+                                })
+                              }
+                            />
+                          ) : (
+                            <span
+                              title="Upgrade to RoofCalc Pro to customize material prices"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontSize: '12px',
+                                color: '#94a3b8',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              <Lock size={11} style={{ color: '#f59e0b' }} />
+                              <span>{formatCurrency(item.unitPrice, currencyCode)}</span>
+                            </span>
+                          )}
                         </td>
                         <td className="boq-price">
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -1543,32 +1640,49 @@ export default function RevitWorkspace({
                           <div className="boq-item-title">Roof Installation &amp; Skilled Labor</div>
                           <div className="boq-item-spec">Professional carpentry, framing &amp; covering</div>
                         </td>
-                        <td className="boq-qty">{geometry.totalArea}</td>
-                        <td>m&sup2;</td>
+                        <td className="boq-qty">—</td>
+                        <td>—</td>
                         <td>
-                          <input
-                            type="number"
-                            min="0"
-                            style={{
-                              width: '90px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              background: 'rgba(15, 23, 42, 0.6)',
-                            }}
-                            value={
-                              customPrices.laborPerM2 !== undefined
-                                ? customPrices.laborPerM2
-                                : currencyCode === 'NGN'
-                                ? 1500
-                                : 3.5
-                            }
-                            onChange={(e) =>
-                              setCustomPrices({
-                                ...customPrices,
-                                laborPerM2: e.target.value,
-                              })
-                            }
-                          />
+                          {isPremium ? (
+                            <input
+                              type="number"
+                              min="0"
+                              style={{
+                                width: '90px',
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                background: 'rgba(15, 23, 42, 0.6)',
+                              }}
+                              value={
+                                customPrices.laborPerM2 !== undefined
+                                  ? customPrices.laborPerM2
+                                  : currencyCode === 'NGN'
+                                  ? 1500
+                                  : 3.5
+                              }
+                              onChange={(e) =>
+                                setCustomPrices({
+                                  ...customPrices,
+                                  laborPerM2: e.target.value,
+                                })
+                              }
+                            />
+                          ) : (
+                            <span
+                              title="Upgrade to RoofCalc Pro to customize labor rate"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontSize: '12px',
+                                color: '#94a3b8',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              <Lock size={11} style={{ color: '#f59e0b' }} />
+                              <span>{formatCurrency(currencyCode === 'NGN' ? 1500 : 3.5, currencyCode)}</span>
+                            </span>
+                          )}
                         </td>
                         <td className="boq-price">
                           {formatCurrency(materials.summary.laborTotal, currencyCode)}
@@ -1584,32 +1698,49 @@ export default function RevitWorkspace({
                           <div className="boq-item-title">Transport &amp; Site Logistics</div>
                           <div className="boq-item-spec">Material delivery &amp; haulage to site</div>
                         </td>
-                        <td className="boq-qty">1</td>
-                        <td>trip</td>
+                        <td className="boq-qty">—</td>
+                        <td>—</td>
                         <td>
-                          <input
-                            type="number"
-                            min="0"
-                            style={{
-                              width: '90px',
-                              padding: '4px 8px',
-                              fontSize: '12px',
-                              background: 'rgba(15, 23, 42, 0.6)',
-                            }}
-                            value={
-                              customPrices.transport !== undefined
-                                ? customPrices.transport
-                                : currencyCode === 'NGN'
-                                ? 25000
-                                : 50
-                            }
-                            onChange={(e) =>
-                              setCustomPrices({
-                                ...customPrices,
-                                transport: e.target.value,
-                              })
-                            }
-                          />
+                          {isPremium ? (
+                            <input
+                              type="number"
+                              min="0"
+                              style={{
+                                width: '90px',
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                background: 'rgba(15, 23, 42, 0.6)',
+                              }}
+                              value={
+                                customPrices.transport !== undefined
+                                  ? customPrices.transport
+                                  : currencyCode === 'NGN'
+                                  ? 25000
+                                  : 50
+                              }
+                              onChange={(e) =>
+                                setCustomPrices({
+                                  ...customPrices,
+                                  transport: e.target.value,
+                                })
+                              }
+                            />
+                          ) : (
+                            <span
+                              title="Upgrade to RoofCalc Pro to customize transport fee"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontSize: '12px',
+                                color: '#94a3b8',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              <Lock size={11} style={{ color: '#f59e0b' }} />
+                              <span>{formatCurrency(currencyCode === 'NGN' ? 25000 : 50, currencyCode)}</span>
+                            </span>
+                          )}
                         </td>
                         <td className="boq-price">
                           {formatCurrency(materials.summary.transportTotal, currencyCode)}
@@ -1620,6 +1751,7 @@ export default function RevitWorkspace({
                 </table>
               </div>
 
+              {isPremium ? (
               <form
                 onSubmit={(e) => handleAddDesktopCustomRow(buildingStage === 'woodwork' ? 'wood' : 'roof', e)}
                 style={{
@@ -1684,6 +1816,58 @@ export default function RevitWorkspace({
                   + Add Row
                 </button>
               </form>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    padding: '10px 14px',
+                    marginBottom: '10px',
+                    borderRadius: '10px',
+                    background: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    fontSize: '12px',
+                    color: '#fef3c7',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong>Disclaimer:</strong> Default prices are generic estimates and may not reflect actual market prices. Free &amp; Guest users can adjust prices or add materials at PDF export (not saved).
+                    </span>
+                  </div>
+                  {onOpenProModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenProModal}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#0f172a',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                      <span>See all benefits of going Pro</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>
+                <strong>Disclaimer:</strong> Default material prices are generic reference estimates and may not reflect actual local market prices.
+              </div>
 
               <div className="boq-summary-bar">
                 <div className="summary-figures">
@@ -2230,7 +2414,52 @@ export default function RevitWorkspace({
                           <tr key={item.id}>
                             <td style={{ color: '#64748b' }}>{idx + 1}</td>
                             <td>
-                              <div className="boq-item-title">{item.name}</div>
+                              <input
+                                type="text"
+                                aria-label={`Edit WC name for ${item.defaultName || item.name}`}
+                                placeholder={item.defaultName || item.name}
+                                value={
+                                  item.isCustom
+                                    ? item.name
+                                    : customPrices?.__customNames?.[item.id] !== undefined
+                                    ? customPrices.__customNames[item.id]
+                                    : item.name
+                                }
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (item.isCustom) {
+                                    const prevList = Array.isArray(customPrices?.__extraItems)
+                                      ? customPrices.__extraItems
+                                      : [];
+                                    setCustomPrices({
+                                      ...(customPrices || {}),
+                                      __extraItems: prevList.map((ci) =>
+                                        ci.id === item.id ? { ...ci, name: val } : ci
+                                      ),
+                                    });
+                                  } else {
+                                    setCustomPrices({
+                                      ...(customPrices || {}),
+                                      __customNames: {
+                                        ...(customPrices?.__customNames || {}),
+                                        [item.id]: val,
+                                      },
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  maxWidth: '300px',
+                                  background: 'rgba(15, 23, 42, 0.55)',
+                                  color: '#f8fafc',
+                                  border: '1px solid rgba(51, 65, 85, 0.75)',
+                                  borderRadius: '6px',
+                                  padding: '3px 8px',
+                                  fontSize: '12.5px',
+                                  fontWeight: 700,
+                                  marginBottom: '2px',
+                                }}
+                              />
                               <div className="boq-item-spec">{item.spec}</div>
                             </td>
                             <td className="boq-qty">{item.quantity.toLocaleString()}</td>
@@ -2278,8 +2507,8 @@ export default function RevitWorkspace({
                               <div className="boq-item-title">WC Installation &amp; Plumbing Labour</div>
                               <div className="boq-item-spec">Gutter hanging, mitering &amp; downspout mounting</div>
                             </td>
-                            <td className="boq-qty">{wcMaterials.summary.laborUnits}</td>
-                            <td>m</td>
+                            <td className="boq-qty">—</td>
+                            <td>—</td>
                             <td>
                               <input
                                 type="number"
@@ -2299,8 +2528,8 @@ export default function RevitWorkspace({
                               <div className="boq-item-title">WC Transport &amp; Delivery</div>
                               <div className="boq-item-spec">Pipe &amp; gutter logistics to site</div>
                             </td>
-                            <td className="boq-qty">1</td>
-                            <td>trip</td>
+                            <td className="boq-qty">—</td>
+                            <td>—</td>
                             <td>
                               <input
                                 type="number"
@@ -2382,7 +2611,11 @@ export default function RevitWorkspace({
                     </button>
                   </form>
 
-                  <div className="boq-summary-bar">
+                  <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>
+                <strong>Disclaimer:</strong> Default material prices are generic reference estimates and may not reflect actual local market prices.
+              </div>
+
+              <div className="boq-summary-bar">
                     <div className="summary-figures">
                       <div className="figure-item">
                         <span className="figure-label">WC Materials</span>
@@ -2418,6 +2651,93 @@ export default function RevitWorkspace({
                 </section>
               </div>
             )}
+          </div>
+        )}
+
+        {mainTab === 'company' && (
+          <div className="studio-boq-view" style={{ maxWidth: '760px', margin: '0 auto', width: '100%' }}>
+            <section className="boq-section glass-panel" style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '14px' }}>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Building2 className="w-5 h-5 text-indigo-400" />
+                  <span>Company Info &amp; PDF Branding</span>
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
+                  Configure your company logo and contact details once — applied automatically to every exported Roof, Woodwork, and Water Collector PDF quote.
+                </p>
+              </div>
+
+              {!isPremium ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '32px 20px',
+                    gap: '12px',
+                    background: 'linear-gradient(160deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.95))',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '14px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '52px',
+                      height: '52px',
+                      borderRadius: '50%',
+                      background: 'rgba(245, 158, 11, 0.18)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#fef3c7' }}>
+                    Company Branding &amp; Custom Prices — RoofCalc Pro
+                  </div>
+                  <p style={{ fontSize: '13px', color: '#cbd5e1', margin: 0, maxWidth: '460px', lineHeight: 1.55 }}>
+                    Upgrade to <strong>RoofCalc Pro</strong> to upload your company logo, customize your contractor
+                    name, phone &amp; address on exported PDFs, and permanently save your material prices to your account.
+                  </p>
+                  {onOpenProModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenProModal}
+                      style={{
+                        marginTop: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        color: '#0f172a',
+                        border: 'none',
+                        borderRadius: '10px',
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Crown className="w-4 h-4" />
+                      <span>Unlock RoofCalc Pro</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <CompanyInfoEditor
+                  contractorInfo={contractorInfo}
+                  setContractorInfo={setContractorInfo}
+                  onUploadLogo={onUploadContractorLogo}
+                  logoUploadError={logoUploadError}
+                  setLogoUploadError={setLogoUploadError}
+                  compact={false}
+                />
+              )}
+            </section>
           </div>
         )}
       </main>

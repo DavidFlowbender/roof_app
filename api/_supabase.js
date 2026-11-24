@@ -76,10 +76,17 @@ export async function getSupabaseProfile(supabaseUrl, serviceKey, { userId = nul
       : null;
   if (!filter) return null;
 
-  const resp = await fetch(
-    `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code`,
+  let resp = await fetch(
+    `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code,custom_prices,contractor_profile`,
     { headers: getSupabaseAdminHeaders(serviceKey) }
   );
+  if (!resp.ok) {
+    // Graceful fallback if custom_prices / contractor_profile columns are not yet migrated
+    resp = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code`,
+      { headers: getSupabaseAdminHeaders(serviceKey) }
+    );
+  }
   if (!resp.ok) return null;
   const rows = await resp.json().catch(() => []);
   return rows?.[0] || null;

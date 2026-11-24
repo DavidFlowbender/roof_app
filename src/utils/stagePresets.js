@@ -1,11 +1,12 @@
 /**
  * Stage Presets Engine for On-Site Estimators
  * Tailored for field roof sellers and carpenters.
- * 
- * 3 Stages:
- * 1. Foundation: Ground footprint only. Automatic standard presets (Hip, 6:12 pitch, 0.45m eaves).
- * 2. Parapet: Walls & parapet up. Parapet height, trough gutters, flashing, coping.
- * 3. Woodwork: Timber skeleton up. Exact measured king post/rafter, purlin spacing, full timber carcass BOQ.
+ *
+ * 2 Site Measurement Levels:
+ * 1. Foundation: Measured at wall/foundation level before parapet is cast. Automatically adds
+ *    editable +0.5m per side to account for the parapet/eaves that will be installed later.
+ * 2. Parapet: Measured at parapet or woodwork outer edge (projection already built).
+ *    Drawn/scanned base dimensions remain exact (+0m added).
  */
 
 export const BUILDING_STAGES = [
@@ -14,14 +15,14 @@ export const BUILDING_STAGES = [
     name: 'Foundation Level',
     shortName: 'Foundation',
     badge: '🏗️ Foundation Level',
-    tagline: 'Ground / DPC Level',
-    summary: 'Only footprint known. Standard presets auto-applied for fast 30-second estimate.',
+    tagline: 'Wall / Foundation Footprint (+0.5m Parapet Allowance)',
+    summary: 'Sketch measured before parapet is built. Automatically adds editable +0.5m per side for future parapet/eaves.',
     iconName: 'Home',
     color: '#10b981', // emerald
     bgLight: 'rgba(16, 185, 129, 0.1)',
     borderLight: 'rgba(16, 185, 129, 0.3)',
     demandedFields: ['length', 'breadth'],
-    presetNotice: 'Foundation level: +0.5m eaves added automatically on both sides (editable, e.g. 0.6m) with 45° / 12:12 pitch.',
+    presetNotice: 'Foundation level: +0.5m per side added automatically (editable) for the parapet/eaves to be installed later.',
     defaults: {
       roofType: 'hip',
       pitchMode: 'ratio',
@@ -33,7 +34,7 @@ export const BUILDING_STAGES = [
       wastePercentage: 10,
       parapet: {
         enabled: false,
-        height: 0.9,
+        height: 0.42,
         wallThickness: 0.225, // 9" standard block
         style: 'eaves',
         includeCoping: false,
@@ -49,15 +50,15 @@ export const BUILDING_STAGES = [
     id: 'parapet',
     name: 'Parapet Level',
     shortName: 'Parapet',
-    badge: '🧱 Concrete Parapet',
-    tagline: 'Outward Parapet Fascia',
-    summary: 'Cast concrete parapet is already included in your measured drawing — base dimensions stay exact (+0m).',
+    badge: '🧱 Parapet Level',
+    tagline: 'Parapet / Woodwork Already Built (+0m Exact)',
+    summary: 'Sketch already measured at the parapet/woodwork edge — base dimensions stay exact (+0m added).',
     iconName: 'Layers',
     color: '#06b6d4', // cyan/sky
     bgLight: 'rgba(6, 182, 212, 0.1)',
     borderLight: 'rgba(6, 182, 212, 0.3)',
     demandedFields: ['length', 'breadth', 'parapetStyle'],
-    presetNotice: 'Parapet level active: drawing dimensions remain exact (+0m extra overhang).',
+    presetNotice: 'Parapet level active: measured at parapet/woodwork edge — dimensions stay exact (+0m added).',
     defaults: {
       roofType: 'hip',
       pitchMode: 'ratio',
@@ -75,55 +76,12 @@ export const BUILDING_STAGES = [
         style: 'fascia_overhang', // Always outward-extending; roof sits on top, never hidden
         includedInSketch: true, // Drawn dimensions already measure parapet-to-parapet
         troughWidth: 0.4,
-        includeCoping: true,
+        includeCoping: false,
       },
       woodwork: {
         includeTimberBOQ: false,
         trussSpacing: 1.2,
         purlinSpacing: 0.6,
-      },
-    },
-  },
-  {
-    id: 'woodwork',
-    name: 'Woodwork Level',
-    shortName: 'Woodwork',
-    badge: '🪵 Woodwork Level',
-    tagline: 'Carcass & Trusses Erected',
-    summary: 'Woodwork is framed on site. Enter your measured Slanting Height (H) if available, or use the angle-based preset + full timber BOQ.',
-    iconName: 'Sliders',
-    color: '#f59e0b', // amber
-    bgLight: 'rgba(245, 158, 11, 0.1)',
-    borderLight: 'rgba(245, 158, 11, 0.3)',
-    demandedFields: ['length', 'breadth', 'slantingHeight', 'measuredOverhang'],
-    presetNotice: 'Woodwork level active: base dimensions remain exact (+0m extra overhang) with adjustable kingpost/angle and timber BOQ.',
-    defaults: {
-      roofType: 'hip',
-      pitchMode: 'angle',
-      pitchRatio: 12,
-      pitchAngle: 45.0,
-      heightVal: 2.5,
-      overhang: { front: 0, back: 0, left: 0, right: 0 },
-      isUniformOverhang: true,
-      wastePercentage: 10,
-      parapet: {
-        enabled: false,
-        height: 0.9,
-        wallThickness: 0.225,
-        style: 'eaves',
-        includeCoping: false,
-      },
-      woodwork: {
-        includeTimberBOQ: true,
-        rafterSize: '2x4',
-        tieBeamSize: '2x6',
-        purlinSize: '2x3',
-        kingPostSize: '2x4',
-        wallPlateSize: '2x4',
-        trussSpacing: 1.2, // meters
-        purlinSpacing: 0.6, // meters
-        timberLengthStandard: 3.6, // 12-foot length in meters
-        includeTreatment: true, // solignum / anti-termite
       },
     },
   },
@@ -164,5 +122,8 @@ export const PURLIN_SPACING_PRESETS = [
  * Get stage metadata by ID
  */
 export function getStageConfig(stageId) {
+  if (stageId === 'woodwork') {
+    return BUILDING_STAGES.find((s) => s.id === 'parapet') || BUILDING_STAGES[0];
+  }
   return BUILDING_STAGES.find((s) => s.id === stageId) || BUILDING_STAGES[0];
 }

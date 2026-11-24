@@ -17,6 +17,16 @@ export function isIosDevice() {
   return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+export function isMobileDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return (
+    isIosDevice() ||
+    /Android|webOS|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua) ||
+    navigator.userAgentData?.mobile === true
+  );
+}
+
 function isDismissedRecently() {
   try {
     const raw = localStorage.getItem(DISMISS_KEY);
@@ -36,7 +46,8 @@ export function dismissPwaBanner() {
 }
 
 /**
- * Shared React hook for Installable PWA state across Android Chrome, Edge, Desktop & iOS Safari.
+ * Shared React hook for Installable PWA state on mobile devices (Android Chrome, Edge & iOS Safari).
+ * Intentionally disabled on desktop browsers.
  */
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -45,9 +56,10 @@ export function usePwaInstall() {
   const [iosGuideOpen, setIosGuideOpen] = useState(false);
 
   const isIos = isIosDevice();
+  const isMobile = isMobileDevice();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !isMobile) return;
 
     const onBeforeInstallPrompt = (e) => {
       e.preventDefault();
@@ -67,9 +79,9 @@ export function usePwaInstall() {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       window.removeEventListener('appinstalled', onAppInstalled);
     };
-  }, []);
+  }, [isMobile]);
 
-  const canInstall = !isInstalled && (Boolean(deferredPrompt) || isIos);
+  const canInstall = isMobile && !isInstalled && (Boolean(deferredPrompt) || isIos);
   const showBanner = canInstall && !bannerDismissed;
 
   const triggerInstall = async () => {

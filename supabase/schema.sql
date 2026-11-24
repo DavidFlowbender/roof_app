@@ -14,6 +14,8 @@ create table if not exists public.profiles (
   ai_scans_limit integer not null default 100,
   ai_scans_reset_at timestamptz not null default (date_trunc('month', now()) + interval '1 month'),
   referred_by_code text,
+  custom_prices jsonb not null default '{}'::jsonb,
+  contractor_profile jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -25,6 +27,8 @@ alter table public.profiles add column if not exists ai_scans_used integer not n
 alter table public.profiles add column if not exists ai_scans_limit integer not null default 100;
 alter table public.profiles add column if not exists ai_scans_reset_at timestamptz not null default (date_trunc('month', now()) + interval '1 month');
 alter table public.profiles add column if not exists referred_by_code text;
+alter table public.profiles add column if not exists custom_prices jsonb not null default '{}'::jsonb;
+alter table public.profiles add column if not exists contractor_profile jsonb not null default '{}'::jsonb;
 
 alter table public.profiles enable row level security;
 

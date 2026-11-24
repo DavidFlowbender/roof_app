@@ -67,6 +67,16 @@ export default async function handler(req, res) {
         remaining: isAdmin ? 999999 : Math.max(0, limit - used),
         unlimited: isAdmin,
       },
+      customPrices:
+        profile?.custom_prices && typeof profile.custom_prices === 'object' && !Array.isArray(profile.custom_prices)
+          ? profile.custom_prices
+          : null,
+      contractorProfile:
+        profile?.contractor_profile &&
+        typeof profile.contractor_profile === 'object' &&
+        !Array.isArray(profile.contractor_profile)
+          ? profile.contractor_profile
+          : null,
     });
   } catch (err) {
     return res.status(502).json({ error: err?.message || 'Profile sync failed.' });

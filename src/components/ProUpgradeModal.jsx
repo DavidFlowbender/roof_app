@@ -473,6 +473,12 @@ export default function ProUpgradeModal({
               <strong>Water Collector (WC) BOQ &amp; Downpipe Quotations:</strong> Unlocked rain gutter runs, corner miters (90°/135°/45°), floor drop pipes, elbows, and PDF exports.
             </span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
+            <CheckCircle2 size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+            <span>
+              <strong>Company Info, PDF Logo &amp; Permanent Saved Prices:</strong> Upload your company logo, set your contractor name &amp; phone once, and save your custom material prices permanently to your account across devices.
+            </span>
+          </div>
         </div>
 
         {supabaseEnabled ? (

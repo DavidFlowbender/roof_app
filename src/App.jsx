@@ -35,6 +35,7 @@ import {
   LogIn,
   LogOut,
   User,
+  Upload,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -96,10 +97,51 @@ import {
   setPreviewProFlag,
   getUserInitials,
   getUserDisplayName,
+  DEFAULT_CONTRACTOR_INFO,
+  getAccountCustomPrices,
+  saveAccountCustomPrices,
+  getAccountContractorProfile,
+  saveAccountContractorProfile,
+  saveUserAccountSettings,
 } from './utils/proSession';
 import './App.css';
 
 const ACTIVE_DESIGN_STORAGE_KEY = 'roofcalc_active_design_v1';
+
+function resizeLogoFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type?.startsWith('image/')) {
+      reject(new Error('Please select a PNG, JPG, WebP, or SVG image file.'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error('Logo file is too large (max 5 MB).'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected image.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not decode the selected image.'));
+      img.onload = () => {
+        const maxW = 360;
+        const maxH = 180;
+        const scale = Math.min(1, maxW / (img.width || 1), maxH / (img.height || 1));
+        const w = Math.max(1, Math.round((img.width || 1) * scale));
+        const h = Math.max(1, Math.round((img.height || 1) * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function readStoredActiveDesign() {
   if (typeof window === 'undefined') return null;
@@ -134,6 +176,71 @@ export default function App() {
   );
   const isAdminUser = isAdminEmail(proSession?.user?.email);
   const effectiveIsPremium = Boolean(isPremium || isAdminUser);
+  const activeAccountUserId = proSession?.user?.id || null;
+  const [priceSyncStatus, setPriceSyncStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
+  const [logoUploadError, setLogoUploadError] = useState('');
+  const hydratedUserIdRef = useRef(null);
+  const lastSyncedPricesJsonRef = useRef('');
+  const lastSyncedContractorJsonRef = useRef('');
+
+  const hydrateAccountFromProfile = (sessionObj, statusObj) => {
+    const uid = sessionObj?.user?.id || null;
+    if (!uid) return;
+
+    const cloudPrices =
+      statusObj?.customPrices &&
+      typeof statusObj.customPrices === 'object' &&
+      !Array.isArray(statusObj.customPrices)
+        ? statusObj.customPrices
+        : null;
+    const localPrices = getAccountCustomPrices(uid);
+
+    if (statusObj?.isPro) {
+      if (cloudPrices && Object.keys(cloudPrices).length > 0) {
+        const json = JSON.stringify(cloudPrices);
+        lastSyncedPricesJsonRef.current = json;
+        saveAccountCustomPrices(uid, cloudPrices);
+        setCustomPrices(cloudPrices);
+        setPriceSyncStatus('saved');
+      } else if (Object.keys(localPrices).length > 0) {
+        const json = JSON.stringify(localPrices);
+        lastSyncedPricesJsonRef.current = json;
+        setCustomPrices(localPrices);
+        setPriceSyncStatus('saving');
+        saveUserAccountSettings(sessionObj.access_token, { customPrices: localPrices }).then((res) => {
+          setPriceSyncStatus(res.ok ? 'saved' : 'error');
+        });
+      } else {
+        lastSyncedPricesJsonRef.current = '{}';
+        setCustomPrices({});
+        setPriceSyncStatus('saved');
+      }
+    } else {
+      lastSyncedPricesJsonRef.current = JSON.stringify(localPrices || {});
+      setCustomPrices(localPrices || {});
+      setPriceSyncStatus('idle');
+    }
+
+    const cloudContractor =
+      statusObj?.contractorProfile &&
+      typeof statusObj.contractorProfile === 'object' &&
+      !Array.isArray(statusObj.contractorProfile)
+        ? statusObj.contractorProfile
+        : null;
+    const localContractor = getAccountContractorProfile(uid);
+
+    if (cloudContractor && Object.keys(cloudContractor).length > 0) {
+      const merged = { ...DEFAULT_CONTRACTOR_INFO, ...cloudContractor };
+      lastSyncedContractorJsonRef.current = JSON.stringify(merged);
+      saveAccountContractorProfile(uid, merged);
+      setContractorInfo(merged);
+    } else {
+      lastSyncedContractorJsonRef.current = JSON.stringify(localContractor);
+      setContractorInfo(localContractor);
+    }
+
+    hydratedUserIdRef.current = uid;
+  };
 
   const showPaymentSuccessToast = (message) => {
     setPaymentToast(message);
@@ -195,6 +302,7 @@ export default function App() {
     }
     setIsPremium(finalStatus.isPro);
     setProQuota(finalStatus.quota);
+    hydrateAccountFromProfile(finalStatus.session || verifiedSession, finalStatus);
   };
 
   useEffect(() => {
@@ -227,6 +335,7 @@ export default function App() {
       }
       setIsPremium(finalStatus.isPro);
       setProQuota(finalStatus.quota);
+      hydrateAccountFromProfile(finalStatus.session || activeSession, finalStatus);
       syncDevAuthSession(finalStatus.session || activeSession);
 
       if (paymentCheck.verified) {
@@ -257,9 +366,15 @@ export default function App() {
     saveStoredProStatus(null);
     setPreviewProFlag(false);
     setAdminModalOpen(false);
+    hydratedUserIdRef.current = null;
+    lastSyncedPricesJsonRef.current = '';
+    lastSyncedContractorJsonRef.current = '';
+    setPriceSyncStatus('idle');
     setProSession(null);
     setIsPremium(false);
     setProQuota(null);
+    setCustomPrices(getAccountCustomPrices(null));
+    setContractorInfo(getAccountContractorProfile(null));
     try {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem('roofcalc_pending_paystack_ref_v1');
@@ -295,8 +410,8 @@ export default function App() {
   // ==========================================
   const [buildingStage, setBuildingStage] = useState(() => {
     const stg = readStoredActiveDesign()?.buildingStage;
-    return stg === 'foundation' || stg === 'parapet' || stg === 'woodwork' ? stg : 'foundation';
-  }); // 'foundation' | 'parapet' | 'woodwork'
+    return stg === 'parapet' || stg === 'woodwork' ? 'parapet' : 'foundation';
+  }); // 'foundation' | 'parapet'
   const [isCustomizingDefaults, setIsCustomizingDefaults] = useState(false);
 
   // Parapet Level Config (Stage 2 or added onto Foundation wall sketch)
@@ -437,32 +552,61 @@ export default function App() {
     setHasActiveDesign(true);
   };
 
-  // Materials & Pricing State
+  // Materials & Pricing State (scoped per account; Pro accounts permanently synced in Supabase)
   const [selectedMaterial, setSelectedMaterial] = useState('stone_coated');
-  const [customPrices, setCustomPrices] = useState(() => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const saved = window.localStorage.getItem('roofcalc_custom_prices_v1');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [customPrices, setCustomPrices] = useState(() =>
+    getAccountCustomPrices(getStoredAuthSession()?.user?.id || null)
+  );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem('roofcalc_custom_prices_v1', JSON.stringify(customPrices || {}));
-    } catch {
-      // ignore storage quota errors
-    }
-  }, [customPrices]);
+    saveAccountCustomPrices(activeAccountUserId, customPrices || {});
+
+    if (!effectiveIsPremium || !proSession?.access_token || !activeAccountUserId) return;
+    if (hydratedUserIdRef.current !== activeAccountUserId) return;
+
+    const serialized = JSON.stringify(customPrices || {});
+    if (serialized === lastSyncedPricesJsonRef.current) return;
+
+    setPriceSyncStatus('saving');
+    const timer = setTimeout(async () => {
+      const res = await saveUserAccountSettings(proSession.access_token, {
+        customPrices: customPrices || {},
+      });
+      if (res.ok) {
+        lastSyncedPricesJsonRef.current = serialized;
+        setPriceSyncStatus('saved');
+      } else {
+        setPriceSyncStatus('error');
+      }
+    }, 650);
+
+    return () => clearTimeout(timer);
+  }, [customPrices, activeAccountUserId, effectiveIsPremium, proSession?.access_token]);
 
   // UI Modes & Modals
   const [viewerMode, setViewerMode] = useState('split'); // 'split' | '3d' | '2d'
   const [sketchModalOpen, setSketchModalOpen] = useState(false);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
-  const [quoteScope, setQuoteScope] = useState('roof'); // 'roof' | 'wc'
+  const [quoteScope, setQuoteScope] = useState('roof'); // 'roof' | 'roof_only' | 'wood' | 'wc'
+  // Ephemeral one-off export price/material adjustments for Free & Guest users (NEVER persisted)
+  const [exportTempPrices, setExportTempPrices] = useState({});
+  const [exportPriceEditorOpen, setExportPriceEditorOpen] = useState(false);
+  const [tempExportRowName, setTempExportRowName] = useState('');
+  const [tempExportRowQty, setTempExportRowQty] = useState('1');
+  const [tempExportRowUnit, setTempExportRowUnit] = useState('pcs');
+  const [tempExportRowPrice, setTempExportRowPrice] = useState('');
+
+  useEffect(() => {
+    if (!quoteModalOpen) {
+      setExportTempPrices({});
+      setExportPriceEditorOpen(false);
+      setTempExportRowName('');
+      setTempExportRowQty('1');
+      setTempExportRowUnit('pcs');
+      setTempExportRowPrice('');
+    }
+  }, [quoteModalOpen]);
   const [wcConfig, setWcConfig] = useState({
     floors: 1,
     extraDrops: 0,
@@ -536,20 +680,53 @@ export default function App() {
     quoteNumber: `RF-${Date.now().toString().slice(-5)}`,
   });
 
-  const [contractorInfo, setContractorInfo] = useState({
-    name: 'Sijitek Solutions',
-    phone: '+234 810 000 0000',
-    email: 'info@sijiteksolutions.com',
-    address: 'Lagos, Nigeria',
-  });
+  const [contractorInfo, setContractorInfo] = useState(() =>
+    getAccountContractorProfile(getStoredAuthSession()?.user?.id || null)
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    saveAccountContractorProfile(activeAccountUserId, contractorInfo);
+
+    if (!effectiveIsPremium || !proSession?.access_token || !activeAccountUserId) return;
+    if (hydratedUserIdRef.current !== activeAccountUserId) return;
+
+    const serialized = JSON.stringify(contractorInfo);
+    if (serialized === lastSyncedContractorJsonRef.current) return;
+
+    const timer = setTimeout(async () => {
+      const res = await saveUserAccountSettings(proSession.access_token, {
+        contractorProfile: contractorInfo,
+      });
+      if (res.ok) {
+        lastSyncedContractorJsonRef.current = serialized;
+      }
+    }, 650);
+
+    return () => clearTimeout(timer);
+  }, [contractorInfo, activeAccountUserId, effectiveIsPremium, proSession?.access_token]);
+
+  const handleContractorLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoUploadError('');
+    try {
+      const logoDataUrl = await resizeLogoFileToDataUrl(file);
+      setContractorInfo((prev) => ({ ...prev, logoDataUrl }));
+    } catch (err) {
+      setLogoUploadError(err?.message || 'Could not process logo image.');
+    }
+  };
 
   // Handle stage switching with automatic standard presets
   const handleStageSelect = (stageId) => {
-    setBuildingStage(stageId);
+    const normalizedStage = stageId === 'parapet' || stageId === 'woodwork' ? 'parapet' : 'foundation';
+    setBuildingStage(normalizedStage);
     setKingpostOverrideM(null);
-    const cfg = getStageConfig(stageId);
+    const cfg = getStageConfig(normalizedStage);
 
-    if (stageId === 'foundation') {
+    if (normalizedStage === 'foundation') {
       const fOv = Math.max(0, Number(foundationOverhangM) || 0);
       setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
@@ -559,8 +736,7 @@ export default function App() {
       setOverhang({ front: fOv, back: fOv, left: fOv, right: fOv });
       setIsUniformOverhang(true);
       setParapetConfig((prev) => ({ ...prev, enabled: false }));
-      setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: false }));
-    } else if (stageId === 'parapet') {
+    } else {
       setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
       setPitchRatio(cfg.defaults.pitchRatio); // 12:12 full roof laying cleanly on parapet
@@ -576,18 +752,6 @@ export default function App() {
         style: 'fascia_overhang',
         includedInSketch: true,
       }));
-      setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: false }));
-    } else if (stageId === 'woodwork') {
-      setRoofType(cfg.defaults.roofType);
-      setPitchMode('angle');
-      setPitchAngle(cfg.defaults.pitchAngle);
-      setWoodworkAngle(cfg.defaults.pitchAngle);
-      setHasSlantingHeight(true);
-      setSlantingHeightInput('');
-      setOverhang({ front: 0, back: 0, left: 0, right: 0 });
-      setIsUniformOverhang(true);
-      setParapetConfig((prev) => ({ ...prev, enabled: false }));
-      setWoodworkConfig((prev) => ({ ...prev, includeTimberBOQ: true }));
     }
   };
 
@@ -729,7 +893,8 @@ export default function App() {
   // Apply converted Paper Sketch -> 2D & Calculations into main workspace
   const handleApplyConvertedSketch = (payload, options = {}) => {
     setHasActiveDesign(true);
-    const nextStage = payload.stageId || buildingStage;
+    const rawStage = payload.stageId || buildingStage;
+    const nextStage = rawStage === 'parapet' || rawStage === 'woodwork' ? 'parapet' : 'foundation';
     setBuildingStage(nextStage);
     setRoofType(payload.roofType || 'hip');
     setLength(payload.length || 12);
@@ -795,13 +960,17 @@ export default function App() {
     });
   }, [length, breadth, effectiveHeight, overhang, roofType, wastePercentage, extensions, polygonVertices]);
 
-  // Bill of Quantities / Materials Results (Stage Aware, Timber BOQ Pro-gated)
+  // Free & Guest users always calculate with default market rates and default Sijitek PDF branding
+  const effectiveCustomPrices = effectiveIsPremium ? customPrices : {};
+  const effectiveContractorInfo = effectiveIsPremium ? contractorInfo : DEFAULT_CONTRACTOR_INFO;
+
+  // Bill of Quantities / Materials Results (Stage Aware, Timber BOQ & Custom Prices Pro-gated)
   const materials = useMemo(() => {
     return estimateMaterials(
       geometry,
       selectedMaterial,
       currencyCode,
-      customPrices,
+      effectiveCustomPrices,
       {
         buildingStage,
         parapetConfig,
@@ -809,16 +978,16 @@ export default function App() {
         allowTimber: effectiveIsPremium,
       }
     );
-  }, [geometry, selectedMaterial, currencyCode, customPrices, buildingStage, parapetConfig, woodworkConfig, effectiveIsPremium]);
+  }, [geometry, selectedMaterial, currencyCode, effectiveCustomPrices, buildingStage, parapetConfig, woodworkConfig, effectiveIsPremium]);
 
   // Water Collector (WC) Estimate
   const wcMaterials = useMemo(() => {
-    return estimateWaterCollector(geometry, currencyCode, customPrices, {
+    return estimateWaterCollector(geometry, currencyCode, effectiveCustomPrices, {
       roofType,
       polygonVertices,
       wcConfig,
     });
-  }, [geometry, currencyCode, customPrices, roofType, polygonVertices, wcConfig]);
+  }, [geometry, currencyCode, effectiveCustomPrices, roofType, polygonVertices, wcConfig]);
 
   // Active Stage Metadata
   const currentStageConfig = useMemo(() => getStageConfig(buildingStage), [buildingStage]);
@@ -854,7 +1023,6 @@ export default function App() {
     setPitchRatio(6);
     setWastePercentage(10);
     setExtensions([]);
-    setCustomPrices({});
     setPolygonVertices(null);
     setKingpostOverrideM(null);
     setSlantingHeightInput('');
@@ -986,9 +1154,69 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
     setTimeout(() => setCopiedToast(false), 3000);
   };
 
+  // Temporary one-time export estimate for Free/Guest users inside Export PDF modal (never saved)
+  const freeExportPreviewMaterials = useMemo(() => {
+    if (effectiveIsPremium || !quoteModalOpen) return null;
+    const est = estimateMaterials(geometry, selectedMaterial, currencyCode, exportTempPrices, {
+      buildingStage,
+      parapetConfig,
+      woodworkConfig,
+      allowTimber: false,
+      includeZeroItems: true,
+    });
+    const roofOnly = (est.items || []).filter((it) => !it.category.includes('Timber'));
+    const activeItems = roofOnly.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);
+    const materialsSubtotal = activeItems.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+    const laborTotal = est.summary?.laborTotal || 0;
+    const transportTotal = est.summary?.transportTotal || 0;
+    const grandTotal = materialsSubtotal + laborTotal + transportTotal;
+    return {
+      ...est,
+      editableItems: roofOnly,
+      items: activeItems,
+      summary: {
+        materialsSubtotal,
+        laborTotal,
+        transportTotal,
+        grandTotal,
+        costPerM2: geometry?.totalArea > 0 ? Math.round(grandTotal / geometry.totalArea) : 0,
+      },
+    };
+  }, [effectiveIsPremium, quoteModalOpen, geometry, selectedMaterial, currencyCode, exportTempPrices, buildingStage, parapetConfig, woodworkConfig]);
+
+  const handleAddTempExportMaterial = (e) => {
+    e.preventDefault();
+    const cleanName = tempExportRowName.trim();
+    if (!cleanName) return;
+    const qty = Math.max(1, Number(tempExportRowQty) || 1);
+    const unitPrice = Math.max(0, Number(tempExportRowPrice) || 0);
+    const unit = tempExportRowUnit.trim() || 'pcs';
+    const id = `tmp_exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const prevList = Array.isArray(exportTempPrices.__extraItems) ? exportTempPrices.__extraItems : [];
+    setExportTempPrices({
+      ...exportTempPrices,
+      __extraItems: [...prevList, { id, scope: 'roof', name: cleanName, quantity: qty, unit, unitPrice }],
+      [id]: String(unitPrice),
+    });
+    setTempExportRowName('');
+    setTempExportRowQty('1');
+    setTempExportRowUnit('pcs');
+    setTempExportRowPrice('');
+  };
+
+  const handleRemoveTempExportMaterial = (itemId) => {
+    const prevList = Array.isArray(exportTempPrices.__extraItems) ? exportTempPrices.__extraItems : [];
+    const nextList = prevList.filter((it) => it.id !== itemId);
+    const next = { ...exportTempPrices };
+    delete next[itemId];
+    if (nextList.length > 0) next.__extraItems = nextList;
+    else delete next.__extraItems;
+    setExportTempPrices(next);
+  };
+
   // Download PDF with Confetti celebration
   const handleDownloadPDF = async () => {
-    if (quoteScope === 'wc' && !effectiveIsPremium) {
+    if ((quoteScope === 'wc' || quoteScope === 'wood') && !effectiveIsPremium) {
       setQuoteModalOpen(false);
       setProModalOpen(true);
       return;
@@ -998,14 +1226,66 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
       spread: 60,
       origin: { y: 0.7 },
     });
-    const activeQuoteMaterials = quoteScope === 'wc' ? wcMaterials : materials;
+
+    let activeQuoteMaterials = materials;
+    if (!effectiveIsPremium && freeExportPreviewMaterials) {
+      // Apply one-off unsaved Free/Guest export price & material edits strictly to this PDF
+      activeQuoteMaterials = {
+        ...freeExportPreviewMaterials,
+        items: freeExportPreviewMaterials.items,
+        summary: freeExportPreviewMaterials.summary,
+      };
+    } else if (quoteScope === 'wc') {
+      activeQuoteMaterials = wcMaterials;
+    } else if (quoteScope === 'wood') {
+      const fullTimber = estimateMaterials(geometry, selectedMaterial, currencyCode, customPrices, {
+        buildingStage: 'woodwork',
+        parapetConfig,
+        woodworkConfig: { ...(woodworkConfig || {}), includeTimberBOQ: true },
+        allowTimber: true,
+      });
+      const woodOnlyItems = (fullTimber.items || []).filter((it) => it.category.includes('Timber'));
+      const woodSubtotal = woodOnlyItems.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+      activeQuoteMaterials = {
+        ...fullTimber,
+        buildingStage: 'woodwork_only',
+        items: woodOnlyItems,
+        summary: {
+          materialsSubtotal: woodSubtotal,
+          laborTotal: 0,
+          transportTotal: 0,
+          grandTotal: woodSubtotal,
+          costPerM2: geometry?.totalArea > 0 ? Math.round(woodSubtotal / geometry.totalArea) : 0,
+        },
+      };
+    } else if (quoteScope === 'roof_only') {
+      const roofOnlyItems = (materials.items || []).filter((it) => !it.category.includes('Timber'));
+      const roofSubtotal = roofOnlyItems.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+      const laborTotal = materials.summary?.laborTotal || 0;
+      const transportTotal = materials.summary?.transportTotal || 0;
+      const grandTotal = roofSubtotal + laborTotal + transportTotal;
+      activeQuoteMaterials = {
+        ...materials,
+        items: roofOnlyItems,
+        summary: {
+          materialsSubtotal: roofSubtotal,
+          laborTotal,
+          transportTotal,
+          grandTotal,
+          costPerM2: geometry?.totalArea > 0 ? Math.round(grandTotal / geometry.totalArea) : 0,
+        },
+      };
+    }
+
     await generateQuotePDF({
       geometry,
       materials: activeQuoteMaterials,
       clientInfo,
-      contractorInfo,
+      contractorInfo: effectiveContractorInfo,
       unitSystem,
     });
+    setExportTempPrices({});
+    setExportPriceEditorOpen(false);
     setQuoteModalOpen(false);
   };
 
@@ -2133,6 +2413,8 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
           sketchUnderlayImage={sketchUnderlayImage}
           onClearUnderlay={() => setSketchUnderlayImage(null)}
           onOpenPaperUpload={() => setSketchModalOpen(true)}
+          wastePercentage={wastePercentage}
+          setWastePercentage={setWastePercentage}
         />
         <Roof3DViewer
           geometry={geometry}
@@ -2177,6 +2459,8 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
         sketchUnderlayImage={sketchUnderlayImage}
         onClearUnderlay={() => setSketchUnderlayImage(null)}
         onOpenPaperUpload={() => setSketchModalOpen(true)}
+        wastePercentage={wastePercentage}
+        setWastePercentage={setWastePercentage}
       />
     )
   );
@@ -2457,6 +2741,12 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
           wastePercentage={wastePercentage}
           setWastePercentage={setWastePercentage}
           isPremium={effectiveIsPremium}
+          priceSyncStatus={priceSyncStatus}
+          contractorInfo={contractorInfo}
+          setContractorInfo={setContractorInfo}
+          onUploadContractorLogo={handleContractorLogoUpload}
+          logoUploadError={logoUploadError}
+          setLogoUploadError={setLogoUploadError}
           onOpenProModal={() => setProModalOpen(true)}
           onOpenAdminModal={isAdminUser ? () => setAdminModalOpen(true) : null}
           onInstallApp={pwaInstall.canInstall ? pwaInstall.triggerInstall : null}
@@ -3175,9 +3465,19 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
       {/* Quote Generator Modal Dialog */}
       {quoteModalOpen && (
         <div className="modal-overlay" onClick={() => setQuoteModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal-card"
+            style={{ maxHeight: '90dvh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3 className="modal-title">Generate Official PDF Quote</h3>
+              <h3 className="modal-title">
+                {quoteScope === 'wc'
+                  ? 'Export Water Collector (WC) PDF'
+                  : quoteScope === 'wood'
+                  ? 'Export Woodwork & Timber PDF'
+                  : 'Generate Official Roof Quote PDF'}
+              </h3>
               <button
                 type="button"
                 className="btn-close-modal"
@@ -3188,7 +3488,7 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
             </div>
 
             <p style={{ fontSize: '13px', color: '#94a3b8' }}>
-              Fill in client and site details to create an official contractor estimate with itemized BOQ and signature sign-off.
+              Enter client and site details to generate an official PDF quotation with itemized BOQ and signature sign-off.
             </p>
 
             <div className="form-group">
@@ -3231,13 +3531,346 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Contractor Company Name</label>
-              <input
-                type="text"
-                value={contractorInfo.name}
-                onChange={(e) => setContractorInfo({ ...contractorInfo, name: e.target.value })}
-              />
+            {/* Free & Guest One-Time Export Price & Material Adjustments (Never Saved) */}
+            {!effectiveIsPremium && freeExportPreviewMaterials && (
+              <div
+                style={{
+                  borderRadius: '10px',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  background: 'rgba(15, 23, 42, 0.72)',
+                  padding: '9px 11px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#f8fafc' }}>
+                      Edit Prices &amp; Add Materials for This Export
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                      One-time only — changes apply to this PDF and will not be saved.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExportPriceEditorOpen((prev) => !prev)}
+                    style={{
+                      background: exportPriceEditorOpen ? '#0ea5e9' : 'rgba(14, 165, 233, 0.16)',
+                      color: exportPriceEditorOpen ? '#ffffff' : '#38bdf8',
+                      border: '1px solid rgba(56, 189, 248, 0.45)',
+                      borderRadius: '7px',
+                      padding: '5px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {exportPriceEditorOpen ? 'Hide Editor' : 'Adjust Now'}
+                  </button>
+                </div>
+
+                {exportPriceEditorOpen && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div
+                      style={{
+                        maxHeight: '190px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        paddingRight: '2px',
+                      }}
+                    >
+                      {(freeExportPreviewMaterials.editableItems || []).map((it) => (
+                        <div
+                          key={`tmp-row-${it.id}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '6px',
+                            background: '#0b1220',
+                            border: '1px solid #1e293b',
+                            borderRadius: '7px',
+                            padding: '5px 8px',
+                            fontSize: '11.5px',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <input
+                              type="text"
+                              aria-label={`Edit name for ${it.defaultName || it.name}`}
+                              placeholder={it.defaultName || it.name}
+                              value={
+                                it.isCustom
+                                  ? it.name
+                                  : exportTempPrices.__customNames?.[it.id] !== undefined
+                                  ? exportTempPrices.__customNames[it.id]
+                                  : it.name
+                              }
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (it.isCustom) {
+                                  const prevList = Array.isArray(exportTempPrices.__extraItems)
+                                    ? exportTempPrices.__extraItems
+                                    : [];
+                                  setExportTempPrices((prev) => ({
+                                    ...prev,
+                                    __extraItems: prevList.map((ci) =>
+                                      ci.id === it.id ? { ...ci, name: val } : ci
+                                    ),
+                                  }));
+                                } else {
+                                  setExportTempPrices((prev) => ({
+                                    ...prev,
+                                    __customNames: {
+                                      ...(prev.__customNames || {}),
+                                      [it.id]: val,
+                                    },
+                                  }));
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '3px 6px',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                background: '#090e1a',
+                                color: '#e2e8f0',
+                                border: '1px solid #263244',
+                                borderRadius: '5px',
+                              }}
+                            />
+                            <div style={{ fontSize: '10px', color: '#64748b' }}>
+                              {it.quantity} {it.unit}
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            value={exportTempPrices[it.id] !== undefined ? exportTempPrices[it.id] : it.unitPrice}
+                            onChange={(e) =>
+                              setExportTempPrices((prev) => ({ ...prev, [it.id]: e.target.value }))
+                            }
+                            style={{
+                              width: '86px',
+                              padding: '4px 6px',
+                              fontSize: '11.5px',
+                              textAlign: 'right',
+                              background: '#090e1a',
+                              color: '#34d399',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                            }}
+                          />
+                          {it.isCustom && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTempExportMaterial(it.id)}
+                              title="Remove item"
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.14)',
+                                color: '#f87171',
+                                border: '1px solid rgba(239, 68, 68, 0.35)',
+                                borderRadius: '6px',
+                                padding: '4px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px' }}>
+                        <label style={{ background: '#0b1220', border: '1px solid #1e293b', borderRadius: '7px', padding: '5px 8px', fontSize: '10.5px', color: '#94a3b8' }}>
+                          <span>Labor / m²</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={exportTempPrices.laborPerM2 !== undefined ? exportTempPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
+                            onChange={(e) => setExportTempPrices((prev) => ({ ...prev, laborPerM2: e.target.value }))}
+                            style={{ width: '100%', marginTop: '3px', padding: '4px 6px', fontSize: '11.5px', background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '5px' }}
+                          />
+                        </label>
+                        <label style={{ background: '#0b1220', border: '1px solid #1e293b', borderRadius: '7px', padding: '5px 8px', fontSize: '10.5px', color: '#94a3b8' }}>
+                          <span>Transport</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={exportTempPrices.transport !== undefined ? exportTempPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
+                            onChange={(e) => setExportTempPrices((prev) => ({ ...prev, transport: e.target.value }))}
+                            style={{ width: '100%', marginTop: '3px', padding: '4px 6px', fontSize: '11.5px', background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '5px' }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Add One-Time Custom Material Row */}
+                    <form
+                      onSubmit={handleAddTempExportMaterial}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        padding: '7px 8px',
+                        borderRadius: '8px',
+                        background: '#090e1a',
+                        border: '1px dashed rgba(56, 189, 248, 0.4)',
+                      }}
+                    >
+                      <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#38bdf8' }}>
+                        + Add Material (This Export Only)
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Item name (e.g. Scaffolding, Paint)"
+                        value={tempExportRowName}
+                        onChange={(e) => setTempExportRowName(e.target.value)}
+                        style={{ padding: '5px 7px', fontSize: '11.5px' }}
+                      />
+                      <div style={{ display: 'grid', gridTemplateColumns: '52px 60px 1fr auto', gap: '5px' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Qty"
+                          value={tempExportRowQty}
+                          onChange={(e) => setTempExportRowQty(e.target.value)}
+                          style={{ padding: '5px 5px', fontSize: '11.5px', textAlign: 'center' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Unit"
+                          value={tempExportRowUnit}
+                          onChange={(e) => setTempExportRowUnit(e.target.value)}
+                          style={{ padding: '5px 5px', fontSize: '11.5px', textAlign: 'center' }}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder={`Price (${currencyCode})`}
+                          value={tempExportRowPrice}
+                          onChange={(e) => setTempExportRowPrice(e.target.value)}
+                          style={{ padding: '5px 7px', fontSize: '11.5px', textAlign: 'right' }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={!tempExportRowName.trim()}
+                          style={{
+                            padding: '5px 9px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: tempExportRowName.trim() ? '#10b981' : '#1e293b',
+                            color: tempExportRowName.trim() ? '#052e16' : '#64748b',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            cursor: tempExportRowName.trim() ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </form>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', padding: '2px 2px 0' }}>
+                      <span style={{ color: '#94a3b8' }}>Updated PDF Total:</span>
+                      <strong style={{ color: '#34d399', fontFamily: 'monospace' }}>
+                        {formatCurrency(freeExportPreviewMaterials.summary.grandTotal, currencyCode)}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    paddingTop: '6px',
+                    borderTop: '1px solid rgba(51, 65, 85, 0.7)',
+                    fontSize: '11px',
+                    color: '#cbd5e1',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span>Want your prices &amp; company logo saved permanently?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuoteModalOpen(false);
+                      setProModalOpen(true);
+                    }}
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.16)',
+                      border: '1px solid rgba(245, 158, 11, 0.45)',
+                      color: '#fbbf24',
+                      borderRadius: '6px',
+                      padding: '4px 9px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    See all benefits of going Pro →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {effectiveIsPremium && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 10px',
+                  borderRadius: '9px',
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid rgba(51, 65, 85, 0.8)',
+                  fontSize: '11.5px',
+                  color: '#94a3b8',
+                }}
+              >
+                {contractorInfo.logoDataUrl && (
+                  <img
+                    src={contractorInfo.logoDataUrl}
+                    alt="Brand Logo"
+                    style={{
+                      width: '28px',
+                      height: '20px',
+                      objectFit: 'contain',
+                      background: '#ffffff',
+                      borderRadius: '4px',
+                      padding: '1px',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  Header Brand: <strong style={{ color: '#e2e8f0' }}>{contractorInfo.name || 'Sijitek Solutions'}</strong>
+                  {' '}• Edit anytime in <strong>Company Info &amp; Prices</strong>
+                </span>
+              </div>
+            )}
+
+            <div
+              style={{
+                fontSize: '10.5px',
+                color: '#94a3b8',
+                lineHeight: 1.4,
+                padding: '6px 9px',
+                borderRadius: '7px',
+                background: 'rgba(15, 23, 42, 0.45)',
+                border: '1px solid rgba(51, 65, 85, 0.55)',
+              }}
+            >
+              <strong>Disclaimer:</strong> Default prices shown are generic reference estimates and may not reflect actual current local market prices.
             </div>
 
             <div className="flex justify-end gap-3" style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>

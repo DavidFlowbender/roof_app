@@ -10,6 +10,100 @@ const PENDING_PAYSTACK_REF_KEY = 'roofcalc_pending_paystack_ref_v1';
 const PENDING_PAYSTACK_TTL_MS = 24 * 60 * 60 * 1000;
 const REFERRAL_CODE_KEY = 'roofcalc_referral_code_v1';
 const REFERRAL_CODE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const LEGACY_CUSTOM_PRICES_KEY = 'roofcalc_custom_prices_v1';
+const CUSTOM_PRICES_PREFIX = 'roofcalc_custom_prices_acct_v2_';
+const CONTRACTOR_PROFILE_PREFIX = 'roofcalc_contractor_acct_v1_';
+
+export const DEFAULT_CONTRACTOR_INFO = {
+  name: 'Sijitek Solutions',
+  phone: '+234 810 000 0000',
+  email: 'info@sijiteksolutions.com',
+  address: 'Lagos, Nigeria',
+  logoDataUrl: '',
+};
+
+export function getAccountCustomPrices(userId = null) {
+  if (typeof window === 'undefined') return {};
+  const key = `${CUSTOM_PRICES_PREFIX}${userId ? String(userId) : 'guest'}`;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    }
+    // One-time read of legacy key for current guest/first-time migration if no account key exists yet
+    if (!userId) {
+      const legacy = window.localStorage.getItem(LEGACY_CUSTOM_PRICES_KEY);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return {};
+}
+
+export function saveAccountCustomPrices(userId = null, prices = {}) {
+  if (typeof window === 'undefined') return;
+  const key = `${CUSTOM_PRICES_PREFIX}${userId ? String(userId) : 'guest'}`;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(prices || {}));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function getAccountContractorProfile(userId = null) {
+  if (typeof window === 'undefined') return { ...DEFAULT_CONTRACTOR_INFO };
+  const key = `${CONTRACTOR_PROFILE_PREFIX}${userId ? String(userId) : 'guest'}`;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...DEFAULT_CONTRACTOR_INFO, ...parsed };
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return { ...DEFAULT_CONTRACTOR_INFO };
+}
+
+export function saveAccountContractorProfile(userId = null, profile = {}) {
+  if (typeof window === 'undefined') return;
+  const key = `${CONTRACTOR_PROFILE_PREFIX}${userId ? String(userId) : 'guest'}`;
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ ...DEFAULT_CONTRACTOR_INFO, ...(profile || {}) }));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export async function saveUserAccountSettings(accessToken, payload = {}) {
+  if (!accessToken) {
+    return { ok: false, error: 'Sign in required.' };
+  }
+  try {
+    const resp = await fetch('/api/user-settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return { ok: false, status: resp.status, error: data?.error || `Save failed (${resp.status})` };
+    }
+    return { ok: true, savedAt: data?.savedAt || new Date().toISOString() };
+  } catch (err) {
+    return { ok: false, error: err?.message || 'Network error while saving settings.' };
+  }
+}
 
 export const DEFAULT_SCAN_TOPUP_PACKS = [
   { id: 'scans_50', label: '+50 AI Scans', scans: 50, amountKobo: 300000, badge: 'Quick Boost' },
@@ -508,11 +602,12 @@ export async function fetchSupabaseProProfile(session) {
   const url = getEnv('VITE_SUPABASE_URL').replace(/\/$/, '');
   const anonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-  const query = async (token, uid) =>
-    fetch(
-      `${url}/rest/v1/profiles?id=eq.${encodeURIComponent(
-        uid
-      )}&select=is_pro,plan_expires_at,ai_scans_used,ai_scans_limit`,
+  const query = async (token, uid, includeSettings = true) => {
+    const cols = includeSettings
+      ? 'is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,custom_prices,contractor_profile'
+      : 'is_pro,plan_expires_at,ai_scans_used,ai_scans_limit';
+    return fetch(
+      `${url}/rest/v1/profiles?id=eq.${encodeURIComponent(uid)}&select=${cols}`,
       {
         headers: {
           apikey: anonKey,
@@ -520,9 +615,15 @@ export async function fetchSupabaseProProfile(session) {
         },
       }
     );
+  };
 
   let activeSession = session;
-  let resp = await query(activeSession.access_token, activeSession.user.id);
+  let resp = await query(activeSession.access_token, activeSession.user.id, true);
+
+  // Graceful fallback if custom_prices / contractor_profile columns are not yet migrated
+  if (resp.status === 400) {
+    resp = await query(activeSession.access_token, activeSession.user.id, false);
+  }
 
   // Refresh expired token automatically if refresh_token is available
   if (resp.status === 401 && activeSession.refresh_token) {
@@ -533,7 +634,10 @@ export async function fetchSupabaseProProfile(session) {
       if (refreshed?.access_token) {
         activeSession = refreshed;
         saveAuthSession(refreshed);
-        resp = await query(activeSession.access_token, activeSession.user?.id || session.user.id);
+        resp = await query(activeSession.access_token, activeSession.user?.id || session.user.id, true);
+        if (resp.status === 400) {
+          resp = await query(activeSession.access_token, activeSession.user?.id || session.user.id, false);
+        }
       }
     } catch {
       saveAuthSession(null);
@@ -568,6 +672,8 @@ export async function fetchSupabaseProProfile(session) {
           return {
             isPro: syncedStatus.isPro,
             quota: syncedStatus.quota,
+            customPrices: synced.customPrices || null,
+            contractorProfile: synced.contractorProfile || null,
             sessionValid: true,
             session: activeSession,
           };
@@ -599,9 +705,22 @@ export async function fetchSupabaseProProfile(session) {
 
   saveStoredProStatus({ isPro, quota });
 
+  const customPrices =
+    profile.custom_prices && typeof profile.custom_prices === 'object' && !Array.isArray(profile.custom_prices)
+      ? profile.custom_prices
+      : null;
+  const contractorProfile =
+    profile.contractor_profile &&
+    typeof profile.contractor_profile === 'object' &&
+    !Array.isArray(profile.contractor_profile)
+      ? profile.contractor_profile
+      : null;
+
   return {
     isPro,
     quota,
+    customPrices,
+    contractorProfile,
     sessionValid: true,
     session: activeSession,
   };

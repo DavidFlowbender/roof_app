@@ -229,7 +229,7 @@ export function analyzeWaterCollectorDesign(geometry, roofType = 'gable', polygo
     const effL = xMax - xMin;
     const effB = zFront - zBack;
 
-    if (roofType === 'hip' || roofType === 'mansard') {
+    if (roofType === 'hip' || roofType === 'mansard' || roofType === 'flat') {
       angle90Count = 4;
       cornerMarkers.push(
         { x: xMin, z: zFront, angleType: 90 },
@@ -522,7 +522,17 @@ export function estimateWaterCollector(
       };
     });
 
-  const combinedItems = [...rawItems, ...customWcItems];
+  const customNames =
+    customPrices?.__customNames && typeof customPrices.__customNames === 'object'
+      ? customPrices.__customNames
+      : {};
+
+  const combinedItems = [...rawItems, ...customWcItems].map((it) => {
+    if (it.isCustom) return { ...it, defaultName: it.name };
+    const override = customNames[it.id];
+    const renamed = typeof override === 'string' && override.trim() ? override.trim() : it.name;
+    return { ...it, defaultName: it.name, name: renamed };
+  });
   const items = includeZeroItems
     ? combinedItems
     : combinedItems.filter((it) => Number(it.quantity) > 0 && Number(it.total) > 0);

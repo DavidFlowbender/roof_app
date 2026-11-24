@@ -21,10 +21,11 @@ import {
   ChevronDown,
   LayoutTemplate,
 } from 'lucide-react';
-import { formatLength, UNIT_SYSTEMS, metersToFeet, feetToMeters } from '../utils/units';
+import { formatLength, formatArea, UNIT_SYSTEMS, metersToFeet, feetToMeters } from '../utils/units';
 import { normalizeOverhang, SHAPE_PRESETS, calculatePolygonMetrics, offsetPolygonVertices } from '../utils/roofMath';
 import { buildRoofSkeleton } from '../utils/roofSkeleton';
 import { BUILDING_STAGES } from '../utils/stagePresets';
+import LevelInfoButton from './LevelInfoButton';
 
 const INPROGRESS_SKETCH_KEY = 'roofcalc_inprogress_sketch_v1';
 
@@ -67,6 +68,8 @@ export default function Roof2DDiagram({
   compactPreview = false,
   readOnlyMobile = false,
   mobileInteractive = false,
+  wastePercentage = 10,
+  setWastePercentage = null,
 }) {
   const svgRef = useRef(null);
   const pointerDownPxRef = useRef(null);
@@ -1298,6 +1301,7 @@ export default function Roof2DDiagram({
               }}
             >
               <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Level:</span>
+              <LevelInfoButton size={16} />
               {BUILDING_STAGES.map((stg) => {
                 const active = buildingStage === stg.id;
                 return (
@@ -1651,6 +1655,115 @@ export default function Roof2DDiagram({
             Pinch or double-tap to zoom
           </div>
         )}
+
+        {/* Live Roof Area & Waste Adjuster HUD (Bottom-Left on 2D Plan) */}
+        {hasActiveDesign && !compactPreview && !readOnlyMobile && (geometry?.totalArea > 0 || geometry?.baseArea > 0) && (() => {
+          const activeWaste = Number.isFinite(Number(wastePercentage))
+            ? Number(wastePercentage)
+            : Number(geometry?.wastePercentage) || 0;
+          return (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{
+                position: 'absolute',
+                bottom: '12px',
+                left: '10px',
+                zIndex: 20,
+                maxWidth: 'calc(100% - 148px)',
+                background: 'rgba(15, 23, 42, 0.94)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(51, 65, 85, 0.85)',
+                borderRadius: '9px',
+                padding: '5px 8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.45)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.03em' }}>
+                  AREA =
+                </span>
+                <span style={{ fontSize: '12.5px', fontWeight: 900, color: '#34d399', fontFamily: 'monospace' }}>
+                  {formatArea(geometry?.totalArea || 0, unitSystem)}
+                </span>
+              </div>
+              {setWastePercentage && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
+                  <span style={{ color: '#94a3b8', fontWeight: 700 }}>Waste:</span>
+                  <button
+                    type="button"
+                    onClick={() => setWastePercentage(Math.max(0, activeWaste - 1))}
+                    aria-label="Decrease waste percentage"
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '5px',
+                      background: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      padding: 0,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    className="compact-num-input"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="1"
+                    aria-label="Waste allowance percentage"
+                    value={activeWaste}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
+                      setWastePercentage(v);
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '20px',
+                      background: '#090e1a',
+                      color: '#34d399',
+                      border: '1px solid #334155',
+                      borderRadius: '5px',
+                      fontSize: '10.5px',
+                      fontWeight: 800,
+                      textAlign: 'center',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                  <span style={{ color: '#34d399', fontWeight: 700 }}>%</span>
+                  <button
+                    type="button"
+                    onClick={() => setWastePercentage(Math.min(30, activeWaste + 1))}
+                    aria-label="Increase waste percentage"
+                    style={{
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '5px',
+                      background: '#1e293b',
+                      color: '#f8fafc',
+                      border: '1px solid #334155',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      padding: 0,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* On-Canvas Zoom & View Controls (Bottom-Right) */}
         <div
@@ -2048,6 +2161,33 @@ export default function Roof2DDiagram({
                   <line x1={eaveLeft} y1={eaveTop} x2={eaveRight} y2={eaveTop} stroke="#f59e0b" strokeWidth="3" pointerEvents="none" />
                 )}
 
+                {roofType === 'flat' && (
+                  <g pointerEvents="none">
+                    <rect
+                      x={eaveMidX - 42}
+                      y={eaveMidY - 10}
+                      width="84"
+                      height="20"
+                      rx="5"
+                      fill="#0f172a"
+                      fillOpacity="0.92"
+                      stroke="#38bdf8"
+                      strokeWidth="1.2"
+                    />
+                    <text
+                      x={eaveMidX}
+                      y={eaveMidY + 3.5}
+                      fill="#38bdf8"
+                      fontSize="9.5"
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      fontFamily="monospace"
+                    >
+                      FLAT ROOF
+                    </text>
+                  </g>
+                )}
+
                 {roofType === 'gambrel' && (
                   <g pointerEvents="none">
                     <line x1={eaveLeft} y1={eaveMidY} x2={eaveRight} y2={eaveMidY} stroke="#f59e0b" strokeWidth="2.6" />
@@ -2057,7 +2197,7 @@ export default function Roof2DDiagram({
                 )}
 
                 {/* Kingpost Height (KP) Apex Callout Badge on Ridge */}
-                {eaveH > 48 && (
+                {roofType !== 'flat' && eaveH > 48 && (
                   <g pointerEvents="none">
                     <rect
                       x={eaveMidX - (isCompactViewport ? 48 : 38)}
@@ -2085,7 +2225,7 @@ export default function Roof2DDiagram({
                 )}
 
                 {/* Slanting Height (H) Double-Headed Arrow on Main Slope */}
-                {(() => {
+                {roofType !== 'flat' && (() => {
                   const yStart = roofType === 'shed' ? eaveTop + 6 : eaveMidY + 6;
                   const yEnd = eaveBottom - 6;
                   if (yEnd - yStart < 20) return null;
@@ -2172,48 +2312,60 @@ export default function Roof2DDiagram({
                 })()}
 
                 {/* Clickable Outer Footprint Dimension Labels */}
-                <g
-                  style={{ cursor: onDimensionsChange ? 'pointer' : 'default' }}
-                  onClick={(e) => {
-                    if (!onDimensionsChange) return;
-                    e.stopPropagation();
-                    openDimEdit('rectL', L);
-                  }}
-                >
-                  <text
-                    x={eaveMidX}
-                    y={eaveBottom + (isCompactViewport ? 20 : 16)}
-                    fill="#cbd5e1"
-                    fontSize={isCompactViewport ? '12.5' : '10'}
-                    fontWeight="600"
-                    textAnchor="middle"
-                    fontFamily="monospace"
-                  >
-                    Wall L: {formatLength(L, unitSystem)} (Eave: {formatLength(effL, unitSystem)})
-                  </text>
-                </g>
+                {(() => {
+                  const isFoundationAdd =
+                    buildingStage === 'foundation' &&
+                    (ov.left + ov.right > 0.005 || ov.front + ov.back > 0.005);
+                  const shownL = isFoundationAdd ? effL : L;
+                  const shownB = isFoundationAdd ? effB : B;
+                  const dimColor = isFoundationAdd ? '#34d399' : '#cbd5e1';
+                  return (
+                    <>
+                      <g
+                        style={{ cursor: onDimensionsChange ? 'pointer' : 'default' }}
+                        onClick={(e) => {
+                          if (!onDimensionsChange) return;
+                          e.stopPropagation();
+                          openDimEdit('rectL', L);
+                        }}
+                      >
+                        <text
+                          x={eaveMidX}
+                          y={eaveBottom + (isCompactViewport ? 20 : 16)}
+                          fill={dimColor}
+                          fontSize={isCompactViewport ? '12.5' : '10'}
+                          fontWeight="700"
+                          textAnchor="middle"
+                          fontFamily="monospace"
+                        >
+                          L: {formatLength(shownL, unitSystem)}
+                        </text>
+                      </g>
 
-                <g
-                  style={{ cursor: onDimensionsChange ? 'pointer' : 'default' }}
-                  onClick={(e) => {
-                    if (!onDimensionsChange) return;
-                    e.stopPropagation();
-                    openDimEdit('rectB', B);
-                  }}
-                >
-                  <text
-                    x={eaveRight + (isCompactViewport ? 16 : 12)}
-                    y={eaveMidY}
-                    fill="#cbd5e1"
-                    fontSize={isCompactViewport ? '12.5' : '10'}
-                    fontWeight="600"
-                    textAnchor="middle"
-                    fontFamily="monospace"
-                    transform={`rotate(90, ${eaveRight + (isCompactViewport ? 16 : 12)}, ${eaveMidY})`}
-                  >
-                    Wall B: {formatLength(B, unitSystem)}
-                  </text>
-                </g>
+                      <g
+                        style={{ cursor: onDimensionsChange ? 'pointer' : 'default' }}
+                        onClick={(e) => {
+                          if (!onDimensionsChange) return;
+                          e.stopPropagation();
+                          openDimEdit('rectB', B);
+                        }}
+                      >
+                        <text
+                          x={eaveRight + (isCompactViewport ? 16 : 12)}
+                          y={eaveMidY}
+                          fill={dimColor}
+                          fontSize={isCompactViewport ? '12.5' : '10'}
+                          fontWeight="700"
+                          textAnchor="middle"
+                          fontFamily="monospace"
+                          transform={`rotate(90, ${eaveRight + (isCompactViewport ? 16 : 12)}, ${eaveMidY})`}
+                        >
+                          B: {formatLength(shownB, unitSystem)}
+                        </text>
+                      </g>
+                    </>
+                  );
+                })()}
               </g>
             );
           })()}
@@ -2269,7 +2421,32 @@ export default function Roof2DDiagram({
                 />
 
                 {/* Sectioned Roof Skeleton: True Hips, Valleys, and Independent Ridges */}
-                {polySkeleton ? (
+                {roofType === 'flat' ? (
+                  <g pointerEvents="none">
+                    <rect
+                      x={centroidPx.x - 42}
+                      y={centroidPx.y - 10}
+                      width="84"
+                      height="20"
+                      rx="5"
+                      fill="#0f172a"
+                      fillOpacity="0.92"
+                      stroke="#38bdf8"
+                      strokeWidth="1.2"
+                    />
+                    <text
+                      x={centroidPx.x}
+                      y={centroidPx.y + 3.5}
+                      fill="#38bdf8"
+                      fontSize="9.5"
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      fontFamily="monospace"
+                    >
+                      FLAT ROOF
+                    </text>
+                  </g>
+                ) : polySkeleton ? (
                   <g pointerEvents="none">
                     {/* Corner Hip Rafters */}
                     {polySkeleton.hips?.map((hip, idx) => {
@@ -2435,7 +2612,31 @@ export default function Roof2DDiagram({
                   const p2Px = meterToPx(edge.p2.x, edge.p2.y);
                   const midX = (p1Px.x + p2Px.x) / 2;
                   const midY = (p1Px.y + p2Px.y) / 2;
-                  const edgeLabel = formatLength(edge.length, unitSystem);
+
+                  // When Foundation (+0.5m/side) is selected, display the updated outer roof edge directly;
+                  // switching to Parapet shows the exact original wall dimensions.
+                  const hasMatchingEaveEdge =
+                    buildingStage === 'foundation' &&
+                    avgOvM > 0.005 &&
+                    Array.isArray(eavePolyPts) &&
+                    eavePolyPts.length === polyMetrics.edges.length;
+                  let displayedLen = edge.length;
+                  let isAdjusted = false;
+                  if (hasMatchingEaveEdge) {
+                    const ep1 = eavePolyPts[idx];
+                    const ep2 = eavePolyPts[(idx + 1) % eavePolyPts.length];
+                    const eaveEdgeLen = Math.hypot(ep2.x - ep1.x, ep2.y - ep1.y);
+                    if (Math.abs(eaveEdgeLen - edge.length) > 0.02) {
+                      displayedLen = eaveEdgeLen;
+                      isAdjusted = true;
+                    }
+                  }
+
+                  const edgeLabel = formatLength(displayedLen, unitSystem);
+                  const boxW = isCompactViewport
+                    ? Math.max(58, (edgeLabel?.length || 5) * 8 + 14)
+                    : Math.max(44, (edgeLabel?.length || 5) * 6.4 + 10);
+                  const boxH = isCompactViewport ? 24 : 16;
 
                   return (
                     <g
@@ -2447,20 +2648,20 @@ export default function Roof2DDiagram({
                       }}
                     >
                       <rect
-                        x={midX - (isCompactViewport ? Math.max(29, (edgeLabel?.length || 5) * 4 + 7) : 22)}
-                        y={midY - (isCompactViewport ? 12 : 8)}
-                        width={isCompactViewport ? Math.max(58, (edgeLabel?.length || 5) * 8 + 14) : 44}
-                        height={isCompactViewport ? 24 : 16}
+                        x={midX - boxW / 2}
+                        y={midY - boxH / 2}
+                        width={boxW}
+                        height={boxH}
                         rx={isCompactViewport ? '5' : '4'}
                         fill="#0f172a"
                         fillOpacity={isCompactViewport ? '0.96' : '0.9'}
-                        stroke="#38bdf8"
+                        stroke={isAdjusted ? '#10b981' : '#38bdf8'}
                         strokeWidth={isCompactViewport ? '1.3' : '0.9'}
                       />
                       <text
                         x={midX}
                         y={midY + (isCompactViewport ? 4.5 : 3.2)}
-                        fill="#38bdf8"
+                        fill={isAdjusted ? '#34d399' : '#38bdf8'}
                         fontSize={isCompactViewport ? '12.5' : '8.5'}
                         fontWeight="bold"
                         textAnchor="middle"
