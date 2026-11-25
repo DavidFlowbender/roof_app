@@ -493,6 +493,78 @@ export default function PaperSketchModal({
         {!rawImageUrl ? (
           /* Step 1: Simple Upload View */
           <div>
+            {!isPremium ? (
+              <div
+                style={{
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.1), rgba(15, 23, 42, 0.92))',
+                  borderRadius: '14px',
+                  padding: '2rem 1.25rem',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                }}
+              >
+                <div
+                  style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: 'rgba(245, 158, 11, 0.18)',
+                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fbbf24',
+                  }}
+                >
+                  <Crown size={24} />
+                </div>
+                <div style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  AI Paper Sketch Scanner is a Pro Feature
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.84rem',
+                    color: 'var(--text-secondary)',
+                    maxWidth: '380px',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  Sign in with a RoofCalc Pro account to snap or upload hand-drawn site sketches and automatically extract walls, corners, and measurements into 2D &amp; 3D.
+                </p>
+                {onOpenUpgrade && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose?.();
+                      onOpenUpgrade();
+                    }}
+                    style={{
+                      marginTop: '0.35rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '0.68rem 1.25rem',
+                      fontSize: '0.86rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Crown size={15} />
+                    <span>Sign In / Unlock RoofCalc Pro</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+            <>
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -563,71 +635,47 @@ export default function PaperSketchModal({
                 color: 'var(--text-muted)',
               }}
             >
-              {isPremium ? (
-                <>
-                  <span style={{ color: '#fbbf24', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Crown size={13} />
-                    Pro AI Auto-Dimension Active
-                  </span>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ color: proQuota && !proQuota.unlimited && proQuota.remaining <= 0 ? '#fca5a5' : 'var(--text-muted)' }}>
-                      {proQuota?.unlimited
-                        ? 'Unlimited (Admin)'
-                        : proQuota
-                        ? `${proQuota.remaining} scan credits left`
-                        : 'Ready'}
-                    </span>
-                    {onOpenUpgrade && !proQuota?.unlimited && (
-                      <button
-                        type="button"
-                        onClick={onOpenUpgrade}
-                        style={{
-                          background:
-                            proQuota && proQuota.remaining <= 15
-                              ? 'rgba(245, 158, 11, 0.2)'
-                              : 'rgba(14, 165, 233, 0.14)',
-                          border: `1px solid ${
-                            proQuota && proQuota.remaining <= 15
-                              ? 'rgba(245, 158, 11, 0.55)'
-                              : 'rgba(56, 189, 248, 0.4)'
-                          }`,
-                          color: proQuota && proQuota.remaining <= 15 ? '#fbbf24' : '#38bdf8',
-                          borderRadius: '999px',
-                          padding: '0.16rem 0.55rem',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Buy Scans
-                      </button>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span>Offline Contour Scanner (Free)</span>
-                  {onOpenUpgrade && (
-                    <button
-                      type="button"
-                      onClick={onOpenUpgrade}
-                      style={{
-                        background: 'rgba(245, 158, 11, 0.16)',
-                        border: '1px solid rgba(245, 158, 11, 0.45)',
-                        color: '#fbbf24',
-                        borderRadius: '999px',
-                        padding: '0.18rem 0.6rem',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Unlock Pro AI
-                    </button>
-                  )}
-                </>
-              )}
+              <span style={{ color: '#fbbf24', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Crown size={13} />
+                Pro AI Auto-Dimension Active
+              </span>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: proQuota && !proQuota.unlimited && proQuota.remaining <= 0 ? '#fca5a5' : 'var(--text-muted)' }}>
+                  {proQuota?.unlimited
+                    ? 'Unlimited (Admin)'
+                    : proQuota
+                    ? `${proQuota.remaining} scan credits left`
+                    : 'Ready'}
+                </span>
+                {onOpenUpgrade && !proQuota?.unlimited && (
+                  <button
+                    type="button"
+                    onClick={onOpenUpgrade}
+                    style={{
+                      background:
+                        proQuota && proQuota.remaining <= 15
+                          ? 'rgba(245, 158, 11, 0.2)'
+                          : 'rgba(14, 165, 233, 0.14)',
+                      border: `1px solid ${
+                        proQuota && proQuota.remaining <= 15
+                          ? 'rgba(245, 158, 11, 0.55)'
+                          : 'rgba(56, 189, 248, 0.4)'
+                      }`,
+                      color: proQuota && proQuota.remaining <= 15 ? '#fbbf24' : '#38bdf8',
+                      borderRadius: '999px',
+                      padding: '0.16rem 0.55rem',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Buy Scans
+                  </button>
+                )}
+              </div>
             </div>
+            </>
+            )}
           </div>
         ) : (
           /* Step 2: Clean Preview & Apply View */

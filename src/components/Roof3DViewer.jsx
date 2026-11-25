@@ -386,6 +386,8 @@ export default function Roof3DViewer({
   selectedMaterial = 'stone_coated',
   wcConfig = null,
   forcedDisplayMode = null,
+  isPremium = true,
+  onOpenProModal = null,
 }) {
   const mountRef = useRef(null);
   const [autoRotate, setAutoRotate] = useState(true);
@@ -401,7 +403,7 @@ export default function Roof3DViewer({
     }
   };
 
-  const effectiveDisplayMode = forcedDisplayMode || roofDisplayMode;
+  const effectiveDisplayMode = forcedDisplayMode || (!isPremium && roofDisplayMode === 'framing' ? 'finished' : roofDisplayMode);
   const activeVisual = MATERIAL_VISUALS[selectedMaterial] || MATERIAL_VISUALS.stone_coated;
 
   useEffect(() => {
@@ -2594,11 +2596,19 @@ export default function Roof3DViewer({
           {!forcedDisplayMode && (
             <button
               type="button"
-              onClick={() =>
-                setRoofDisplayMode((prev) => (prev === 'framing' ? 'finished' : 'framing'))
+              onClick={() => {
+                if (!isPremium) {
+                  onOpenProModal?.();
+                  return;
+                }
+                setRoofDisplayMode((prev) => (prev === 'framing' ? 'finished' : 'framing'));
+              }}
+              title={
+                isPremium
+                  ? 'Switch between Covered Roof and Timber Frame'
+                  : 'Timber Frame 3D View requires RoofCalc Pro'
               }
-              title="Switch between Covered Roof and Timber Frame"
-              className={`viewer-3d-btn ${roofDisplayMode === 'framing' ? 'active' : ''}`}
+              className={`viewer-3d-btn ${isPremium && roofDisplayMode === 'framing' ? 'active' : ''}`}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -2609,7 +2619,11 @@ export default function Roof3DViewer({
                 whiteSpace: 'nowrap',
               }}
             >
-              {roofDisplayMode === 'framing' ? '🪵 Timber Frame' : '🏠 Covered'}
+              {!isPremium
+                ? '🔒 Timber Frame (Pro)'
+                : roofDisplayMode === 'framing'
+                ? '🪵 Timber Frame'
+                : '🏠 Covered'}
             </button>
           )}
 

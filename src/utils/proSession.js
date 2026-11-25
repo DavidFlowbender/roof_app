@@ -417,6 +417,20 @@ export function saveAuthSession(session, options = {}) {
   }
 }
 
+export async function clearDevAuthSession() {
+  const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+  if (!isDev || typeof window === 'undefined') return;
+  try {
+    await fetch('/api/__dev-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: null, proStatus: null }),
+    });
+  } catch {
+    // Ignore dev session bridge errors
+  }
+}
+
 export async function syncDevAuthSession(existingSession = null) {
   const isDev = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
   if (!isDev || typeof window === 'undefined') {

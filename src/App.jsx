@@ -85,6 +85,7 @@ import {
   isAdminEmail,
   getStoredAuthSession,
   saveAuthSession,
+  clearDevAuthSession,
   syncDevAuthSession,
   getStoredProStatus,
   saveStoredProStatus,
@@ -366,12 +367,14 @@ export default function App() {
     setIsPremium(Boolean(enabled));
   };
 
-  const handleProSignOut = () => {
-    saveAuthSession(null);
+  const handleProSignOut = async () => {
+    saveAuthSession(null, { skipRemoteSync: true });
     saveStoredProStatus(null);
     setPreviewProFlag(false);
     setIsPasswordRecovery(false);
     setAdminModalOpen(false);
+    setProModalOpen(false);
+    setSketchModalOpen(false);
     hydratedUserIdRef.current = null;
     lastSyncedPricesJsonRef.current = '';
     lastSyncedContractorJsonRef.current = '';
@@ -385,11 +388,17 @@ export default function App() {
     try {
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem('roofcalc_pending_paystack_ref_v1');
+        window.sessionStorage.removeItem(ACTIVE_DESIGN_STORAGE_KEY);
+        window.sessionStorage.removeItem('roofcalc_in_progress_sketch_v1');
         window.sessionStorage.removeItem('roofcalc_active_sketch_modal_v1');
         window.google?.accounts?.id?.disableAutoSelect?.();
       }
     } catch {
       // Ignore storage errors
+    }
+    await clearDevAuthSession();
+    if (typeof window !== 'undefined') {
+      window.location.replace(`${window.location.origin}${window.location.pathname}`);
     }
   };
 

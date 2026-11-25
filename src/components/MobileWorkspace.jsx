@@ -1604,9 +1604,70 @@ export default function MobileWorkspace({
             </div>
           )}
 
-          {/* PAGE: WOODWORK (2 SUB-PAGES: 3D TIMBER FRAME VIEW & WOOD QUOTE) */}
+          {/* PAGE: WOODWORK (PRO-ONLY: 3D TIMBER FRAME VIEW & WOOD QUOTE) */}
           {activePage === 'wood' && (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {!isPremium ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.12), rgba(15, 23, 42, 0.94))',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: '14px',
+                    padding: '22px 18px',
+                    gap: '10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc' }}>
+                    Woodwork &amp; Timber Carcass is Pro
+                  </div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5, maxWidth: '300px' }}>
+                    Sign in with a RoofCalc Pro account to unlock 3D timber framing, rafter, purlin, kingpost, and tie-beam BOQ schedules &amp; PDF exports.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onOpenProModal?.()}
+                    style={{
+                      marginTop: '6px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 18px',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Crown className="w-4 h-4" />
+                    <span>Sign In / Unlock RoofCalc Pro</span>
+                  </button>
+                </div>
+              ) : (
+              <>
               {renderSubPageSwitcher(woodSubPage, setWoodSubPage, '3D Wood', 'Wood Quote', Hammer, !isPremium)}
 
               {/* SUB-PAGE 1: 3D TIMBER FRAME VIEW */}
@@ -1789,12 +1850,75 @@ export default function MobileWorkspace({
 
               {/* SUB-PAGE 2: WOOD QUOTATION */}
               {woodSubPage === 'quote' && renderRoofOrWoodQuote('wood')}
+              </>
+              )}
             </div>
           )}
 
-          {/* PAGE: WC (WATER COLLECTOR — 2 SUB-PAGES: 3D VIEW & QUOTE) */}
+          {/* PAGE: WC (PRO-ONLY: WATER COLLECTOR 3D VIEW & QUOTE) */}
           {activePage === 'wc' && (
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {!isPremium ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    background: 'linear-gradient(145deg, rgba(14, 165, 233, 0.14), rgba(15, 23, 42, 0.94))',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    borderRadius: '14px',
+                    padding: '22px 18px',
+                    gap: '10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc' }}>
+                    Water Collector (WC) is Pro
+                  </div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#cbd5e1', lineHeight: 1.5, maxWidth: '300px' }}>
+                    Sign in with a RoofCalc Pro account to unlock 3D rain gutter &amp; downspout drop plans, corner miters, WC BOQ schedules &amp; PDF exports.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onOpenProModal?.()}
+                    style={{
+                      marginTop: '6px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                      color: '#0f172a',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '10px 18px',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Crown className="w-4 h-4" />
+                    <span>Sign In / Unlock RoofCalc Pro</span>
+                  </button>
+                </div>
+              ) : (
+              <>
               {renderSubPageSwitcher(wcSubPage, setWcSubPage, '3D WC View', 'WC Quote', Droplets, !isPremium)}
 
               {/* SUB-PAGE 1: CLEAR 3D WC PLAN + FLOORS & DROP POINT CONTROLS */}
@@ -2307,6 +2431,8 @@ export default function MobileWorkspace({
                     </button>
                   </div>
                 </>
+              )}
+              </>
               )}
             </div>
           )}

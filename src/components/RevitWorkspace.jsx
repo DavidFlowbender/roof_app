@@ -1198,6 +1198,8 @@ export default function RevitWorkspace({
                     parapetConfig={parapetConfig}
                     woodworkConfig={woodworkConfig}
                     selectedMaterial={selectedMaterial}
+                    isPremium={isPremium}
+                    onOpenProModal={onOpenProModal}
                   />
                 ) : (
                   <div
@@ -2035,6 +2037,78 @@ export default function RevitWorkspace({
         )}
 
         {mainTab === 'wc' && wcMaterials && (
+          !isPremium ? (
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '24px',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  maxWidth: '500px',
+                  background: 'linear-gradient(145deg, rgba(14, 165, 233, 0.14), rgba(15, 23, 42, 0.96))',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  borderRadius: '16px',
+                  padding: '28px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  gap: '12px',
+                  boxShadow: '0 20px 50px rgba(2, 6, 23, 0.55)',
+                }}
+              >
+                <div
+                  style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '50%',
+                    background: 'rgba(245, 158, 11, 0.18)',
+                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fbbf24',
+                  }}
+                >
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: '#f8fafc' }}>
+                  Water Collector (WC) is a Pro Feature
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: 1.55 }}>
+                  Sign in with a RoofCalc Pro account to unlock 3D rain gutter &amp; downspout pipe layouts, corner miters, WC BOQ schedules, and PDF quote exports.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenProModal && onOpenProModal()}
+                  style={{
+                    marginTop: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: '#0f172a',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '11px 20px',
+                    fontSize: '13.5px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Crown className="w-4 h-4" />
+                  <span>Sign In / Unlock RoofCalc Pro</span>
+                </button>
+              </div>
+            </div>
+          ) : (
           <div
             style={{
               flex: 1,
@@ -2830,6 +2904,7 @@ export default function RevitWorkspace({
               </div>
             )}
           </div>
+          )
         )}
 
         {mainTab === 'company' && (
