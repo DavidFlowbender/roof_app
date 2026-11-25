@@ -493,8 +493,8 @@ export default function Roof3DViewer({
         setActiveViewPreset(null);
       }
 
-      rotationY += deltaX * 0.008;
-      rotationX = Math.max(-0.2, Math.min(1.48, rotationX - deltaY * 0.008));
+      rotationY -= deltaX * 0.008;
+      rotationX = Math.max(-0.2, Math.min(1.48, rotationX + deltaY * 0.008));
       updateCamera();
     };
 
@@ -550,8 +550,8 @@ export default function Roof3DViewer({
           setActiveViewPreset(null);
         }
 
-        rotationY += deltaX * 0.008;
-        rotationX = Math.max(-0.2, Math.min(1.48, rotationX - deltaY * 0.008));
+        rotationY -= deltaX * 0.008;
+        rotationX = Math.max(-0.2, Math.min(1.48, rotationX + deltaY * 0.008));
         updateCamera();
       }
     };
