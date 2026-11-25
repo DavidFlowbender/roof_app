@@ -403,7 +403,7 @@ export default function Roof3DViewer({
     }
   };
 
-  const effectiveDisplayMode = forcedDisplayMode || (!isPremium && roofDisplayMode === 'framing' ? 'finished' : roofDisplayMode);
+  const effectiveDisplayMode = forcedDisplayMode || roofDisplayMode;
   const activeVisual = MATERIAL_VISUALS[selectedMaterial] || MATERIAL_VISUALS.stone_coated;
 
   useEffect(() => {
@@ -2596,19 +2596,11 @@ export default function Roof3DViewer({
           {!forcedDisplayMode && (
             <button
               type="button"
-              onClick={() => {
-                if (!isPremium) {
-                  onOpenProModal?.();
-                  return;
-                }
-                setRoofDisplayMode((prev) => (prev === 'framing' ? 'finished' : 'framing'));
-              }}
-              title={
-                isPremium
-                  ? 'Switch between Covered Roof and Timber Frame'
-                  : 'Timber Frame 3D View requires RoofCalc Pro'
+              onClick={() =>
+                setRoofDisplayMode((prev) => (prev === 'framing' ? 'finished' : 'framing'))
               }
-              className={`viewer-3d-btn ${isPremium && roofDisplayMode === 'framing' ? 'active' : ''}`}
+              title="Switch between Covered Roof and 3D Timber Frame Preview"
+              className={`viewer-3d-btn ${roofDisplayMode === 'framing' ? 'active' : ''}`}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -2619,11 +2611,7 @@ export default function Roof3DViewer({
                 whiteSpace: 'nowrap',
               }}
             >
-              {!isPremium
-                ? '🔒 Timber Frame (Pro)'
-                : roofDisplayMode === 'framing'
-                ? '🪵 Timber Frame'
-                : '🏠 Covered'}
+              {roofDisplayMode === 'framing' ? '🪵 Timber Frame' : '🏠 Covered'}
             </button>
           )}
 
