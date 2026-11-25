@@ -864,19 +864,23 @@ export async function startPaystackCheckout(accessToken, optionsOrFallbackEmail 
   if (!resp.ok) {
     if (data?.code === 'PAYMENT_NOT_CONFIGURED' && purchaseType === 'pro_upgrade') {
       const staticUrl = getPaystackCheckoutUrl(fallbackEmail);
-      if (staticUrl) return staticUrl;
+      if (staticUrl) return { authorizationUrl: staticUrl, accessCode: '', reference: '' };
     }
     throw new Error(data?.error || `Could not start checkout (${resp.status}).`);
   }
 
-  if (!data?.authorization_url) {
+  if (!data?.authorization_url && !data?.access_code) {
     throw new Error('Checkout endpoint did not return a payment URL.');
   }
   // Persist Paystack transaction reference so Bank Transfer / Back-button returns can still verify automatically
   if (data?.reference) {
     savePendingPaystackRef(data.reference);
   }
-  return data.authorization_url;
+  return {
+    authorizationUrl: data.authorization_url || '',
+    accessCode: data.access_code || '',
+    reference: data.reference || '',
+  };
 }
 
 export async function verifyPaystackPaymentOnReturn(accessToken) {

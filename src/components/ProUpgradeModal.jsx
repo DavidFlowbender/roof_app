@@ -28,12 +28,46 @@ import {
   consumeOAuthCallbackFromUrl,
   getStoredReferralCode,
   saveStoredReferralCode,
+  savePendingPaystackRef,
   fetchPricingAndReferral,
   formatKoboAsCurrency,
   DEFAULT_PRO_PLANS,
   DEFAULT_PRO_PLAN_ID,
   DEFAULT_SCAN_TOPUP_PACKS,
 } from '../utils/proSession';
+
+let paystackInlineScriptPromise = null;
+function loadPaystackInlineScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('No browser window'));
+  if (typeof window.PaystackPop === 'function') return Promise.resolve(window.PaystackPop);
+  if (!paystackInlineScriptPromise) {
+    paystackInlineScriptPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src="https://js.paystack.co/v2/inline.js"]');
+      if (existing) {
+        if (typeof window.PaystackPop === 'function') {
+          resolve(window.PaystackPop);
+          return;
+        }
+        existing.addEventListener('load', () => resolve(window.PaystackPop));
+        existing.addEventListener('error', () => {
+          paystackInlineScriptPromise = null;
+          reject(new Error('Failed to load Paystack checkout'));
+        });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://js.paystack.co/v2/inline.js';
+      script.async = true;
+      script.onload = () => resolve(window.PaystackPop);
+      script.onerror = () => {
+        paystackInlineScriptPromise = null;
+        reject(new Error('Failed to load Paystack checkout'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return paystackInlineScriptPromise;
+}
 
 let googleGsiScriptPromise = null;
 function loadGoogleGsiScript() {
@@ -104,21 +138,18 @@ export default function ProUpgradeModal({
     plans: DEFAULT_PRO_PLANS,
     scanPacks: DEFAULT_SCAN_TOPUP_PACKS,
   });
-  const [referralInput, setReferralInput] = useState(() => getStoredReferralCode());
+  const [referralInput, setReferralInput] = useState('');
   const [appliedReferral, setAppliedReferral] = useState(null); // { code, influencerName, discountPercent }
   const [referralBusy, setReferralBusy] = useState(false);
   const [referralError, setReferralError] = useState('');
 
   const supabaseEnabled = isSupabaseConfigured();
 
-  // Fetch live server plans & packs + auto-validate any saved ?ref=CODE whenever modal opens
+  // Fetch live server plans & packs + silently validate any saved ?ref=CODE whenever modal opens
   useEffect(() => {
     if (!isOpen || !supabaseEnabled) return;
     let cancelled = false;
     const savedCode = getStoredReferralCode();
-    if (savedCode && !referralInput) {
-      setReferralInput(savedCode);
-    }
 
     (async () => {
       try {
@@ -135,6 +166,7 @@ export default function ProUpgradeModal({
         });
         if (!isPremium && savedCode) {
           if (data.valid) {
+            setReferralInput(data.code);
             setAppliedReferral({
               code: data.code,
               influencerName: data.influencerName || '',
@@ -142,8 +174,11 @@ export default function ProUpgradeModal({
             });
             setReferralError('');
           } else {
+            // Silently clear stale/invalid saved referral code so the input stays clean and empty
+            saveStoredReferralCode('');
+            setReferralInput('');
             setAppliedReferral(null);
-            if (data.error) setReferralError(data.error);
+            setReferralError('');
           }
         }
       } catch {
@@ -334,18 +369,63 @@ export default function ProUpgradeModal({
     }
   };
 
+  const launchPaystackPopupOrRedirect = async (checkout) => {
+    const { authorizationUrl = '', accessCode = '', reference = '' } = checkout || {};
+    if (accessCode) {
+      try {
+        const PaystackPopCtor = await loadPaystackInlineScript();
+        if (typeof PaystackPopCtor === 'function') {
+          const popup = new PaystackPopCtor();
+          if (typeof popup.resumeTransaction === 'function') {
+            popup.resumeTransaction(accessCode, {
+              onSuccess: async (tx) => {
+                const finalRef = tx?.reference || reference;
+                if (finalRef) savePendingPaystackRef(finalRef);
+                setFeedback('Payment received! Activating your Pro access...');
+                try {
+                  if (onRefreshStatus) await onRefreshStatus();
+                } finally {
+                  setCheckoutBusyId('');
+                }
+              },
+              onCancel: async () => {
+                setCheckoutBusyId('');
+                // In case a Bank Transfer settled right before closing, quietly refresh status
+                if (onRefreshStatus) {
+                  try {
+                    await onRefreshStatus();
+                  } catch {
+                    // Ignore
+                  }
+                }
+              },
+            });
+            return;
+          }
+        }
+      } catch {
+        // Fall back gracefully to hosted redirect below if InlineJS is blocked
+      }
+    }
+    if (authorizationUrl) {
+      window.location.assign(authorizationUrl);
+      return;
+    }
+    throw new Error('Could not open Paystack checkout.');
+  };
+
   const handleStartProCheckout = async () => {
     setCheckoutBusyId('pro_upgrade');
     setErrorMsg('');
     setFeedback('');
     try {
-      const checkoutUrl = await startPaystackCheckout(proAccessToken, {
+      const checkout = await startPaystackCheckout(proAccessToken, {
         purchaseType: 'pro_upgrade',
         planId: selectedPlan.id,
         referralCode: appliedReferral?.code || '',
         fallbackEmail: proEmail || email,
       });
-      window.location.assign(checkoutUrl);
+      await launchPaystackPopupOrRedirect(checkout);
     } catch (err) {
       setErrorMsg(err?.message || 'Unable to launch Paystack checkout.');
       setCheckoutBusyId('');
@@ -357,12 +437,12 @@ export default function ProUpgradeModal({
     setErrorMsg('');
     setFeedback('');
     try {
-      const checkoutUrl = await startPaystackCheckout(proAccessToken, {
+      const checkout = await startPaystackCheckout(proAccessToken, {
         purchaseType: 'scan_topup',
         packId: pack.id,
         fallbackEmail: proEmail || email,
       });
-      window.location.assign(checkoutUrl);
+      await launchPaystackPopupOrRedirect(checkout);
     } catch (err) {
       setErrorMsg(err?.message || 'Unable to launch scan top-up checkout.');
       setCheckoutBusyId('');
@@ -787,6 +867,11 @@ export default function ProUpgradeModal({
                       </button>
                     </div>
 
+                    {feedback && (
+                      <div style={{ fontSize: '0.76rem', color: '#34d399', lineHeight: 1.4, textAlign: 'center', fontWeight: 600 }}>
+                        {feedback}
+                      </div>
+                    )}
                     {errorMsg && (
                       <div style={{ fontSize: '0.76rem', color: '#f87171', lineHeight: 1.4 }}>
                         {errorMsg}
@@ -932,7 +1017,7 @@ export default function ProUpgradeModal({
                           type="text"
                           value={referralInput}
                           onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
-                          placeholder="Enter code (e.g. CHUKA15)"
+                          placeholder="Enter referral code (optional)"
                           disabled={referralBusy || isCheckoutBusy}
                           style={{
                             flex: 1,
@@ -1000,7 +1085,7 @@ export default function ProUpgradeModal({
                         {checkoutBusyId === 'pro_upgrade' ? (
                           <>
                             <Loader2 size={15} className="animate-spin" />
-                            <span>Redirecting to Paystack...</span>
+                            <span>Opening Paystack...</span>
                           </>
                         ) : (
                           <>
@@ -1033,6 +1118,11 @@ export default function ProUpgradeModal({
                     <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', lineHeight: 1.4, textAlign: 'center' }}>
                       Pay via Bank Transfer, OPay, USSD, or Card on Paystack. No forced auto-renewals.
                     </div>
+                    {feedback && (
+                      <div style={{ fontSize: '0.76rem', color: '#34d399', lineHeight: 1.4, textAlign: 'center', fontWeight: 600 }}>
+                        {feedback}
+                      </div>
+                    )}
                     {errorMsg && (
                       <div style={{ fontSize: '0.76rem', color: '#f87171', lineHeight: 1.4 }}>
                         {errorMsg}

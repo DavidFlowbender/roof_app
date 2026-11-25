@@ -362,6 +362,29 @@ export default function App() {
     };
   }, [proSession]);
 
+  // Auto-verify any pending Paystack payment as soon as the user returns to the app/PWA tab
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !proSession?.access_token) return;
+    let checking = false;
+    const checkOnReturn = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      if (!hasPendingPaystackCheck()) return;
+      checking = true;
+      try {
+        await syncProAccount(proSession);
+      } finally {
+        checking = false;
+      }
+    };
+    window.addEventListener('focus', checkOnReturn);
+    document.addEventListener('visibilitychange', checkOnReturn);
+    return () => {
+      window.removeEventListener('focus', checkOnReturn);
+      document.removeEventListener('visibilitychange', checkOnReturn);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proSession]);
+
   const handleTogglePreviewPro = (enabled) => {
     setPreviewProFlag(enabled);
     setIsPremium(Boolean(enabled));

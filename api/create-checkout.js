@@ -183,6 +183,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       authorization_url: payData.data.authorization_url,
+      access_code: payData.data.access_code || '',
       reference: payData.data.reference,
       amountKobo: amount,
       purchaseType,
