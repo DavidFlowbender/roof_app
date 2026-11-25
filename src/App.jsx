@@ -769,7 +769,7 @@ export default function App() {
   };
 
   // Handle stage switching with automatic standard presets
-  const handleStageSelect = (stageId) => {
+  const handleStageSelect = (stageId, options = {}) => {
     const normalizedStage = stageId === 'parapet' || stageId === 'woodwork' ? 'parapet' : 'foundation';
     setBuildingStage(normalizedStage);
     setKingpostOverrideM(null);
@@ -777,7 +777,7 @@ export default function App() {
 
     if (normalizedStage === 'foundation') {
       const fOv = Math.max(0, Number(foundationOverhangM) || 0);
-      setRoofType(cfg.defaults.roofType);
+      if (!options?.preserveRoofType) setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
       setPitchRatio(cfg.defaults.pitchRatio);
       setPitchAngle(cfg.defaults.pitchAngle);
@@ -786,7 +786,7 @@ export default function App() {
       setIsUniformOverhang(true);
       setParapetConfig((prev) => ({ ...prev, enabled: false }));
     } else {
-      setRoofType(cfg.defaults.roofType);
+      if (!options?.preserveRoofType) setRoofType(cfg.defaults.roofType);
       setPitchMode(cfg.defaults.pitchMode);
       setPitchRatio(cfg.defaults.pitchRatio); // 12:12 full roof laying cleanly on parapet
       setPitchAngle(cfg.defaults.pitchAngle);

@@ -182,10 +182,7 @@ export default function PaperSketchModal({
   const [lengthM, setLengthM] = useState(() => Number(readStoredSketchModalState()?.lengthM) || 12.0);
   const [breadthM, setBreadthM] = useState(() => Number(readStoredSketchModalState()?.breadthM) || 8.0);
   const [polygonVertices, setPolygonVertices] = useState(() => readStoredSketchModalState()?.polygonVertices || null);
-  const [overhangM, setOverhangM] = useState(() => {
-    const ov = readStoredSketchModalState()?.overhangM;
-    return ov !== undefined && ov !== null && Number.isFinite(Number(ov)) ? Number(ov) : 0.45;
-  });
+  const [overhangM, setOverhangM] = useState(0);
   const [parapetHeightM, setParapetHeightM] = useState(() => Number(readStoredSketchModalState()?.parapetHeightM) || 0.42);
   const [kingpostM, setKingpostM] = useState(() => Number(readStoredSketchModalState()?.kingpostM) || 2.25);
   const [extensions, setExtensions] = useState(() => {
@@ -262,12 +259,9 @@ export default function PaperSketchModal({
       const nextRoof = result.roofType || 'hip';
       const nextL = Math.max(1.0, Number(result.length) || 10.0);
       const nextB = Math.max(1.0, Number(result.breadth) || 7.0);
-      const nextOv =
-        initialStage === 'foundation'
-          ? result.overhang !== null && result.overhang !== undefined
-            ? Math.max(0, Number(result.overhang))
-            : 0.5
-          : 0;
+      // Always keep exact paper dimensions in the scan preview and on initial apply;
+      // users select Foundation (+eaves) vs Parapet (exact) in 2D space after applying.
+      const nextOv = 0;
 
       let nextPoly = null;
       if (nextShape !== 'rectangle') {
@@ -309,7 +303,7 @@ export default function PaperSketchModal({
       setActivePreviewTab('2d');
 
       if (onApplyConvertedSketch) {
-        const overhangObj = { front: nextOv, back: nextOv, left: nextOv, right: nextOv };
+        const overhangObj = { front: 0, back: 0, left: 0, right: 0 };
         const computedSlope = calculateSlantingHeightFromKingpost(
           finalKp,
           nextB,
@@ -319,7 +313,7 @@ export default function PaperSketchModal({
         );
         onApplyConvertedSketch(
           {
-            stageId: initialStage,
+            stageId: 'parapet',
             roofType: nextRoof,
             length: Number(nextL) || 10,
             breadth: Number(nextB) || 7,
@@ -388,21 +382,21 @@ export default function PaperSketchModal({
   const activePoly = shapeType === 'rectangle' ? null : polygonVertices;
 
   const slopeInfo = useMemo(() => {
-    const overhangObj = { front: overhangM, back: overhangM, left: overhangM, right: overhangM };
+    const overhangObj = { front: 0, back: 0, left: 0, right: 0 };
     return calculateSlantingHeightFromKingpost(kingpostM, breadthM, overhangObj, roofType, activePoly);
-  }, [kingpostM, breadthM, overhangM, roofType, activePoly]);
+  }, [kingpostM, breadthM, roofType, activePoly]);
 
   const previewGeometry = useMemo(() => {
     return calculateRoofGeometry({
       length: lengthM,
       breadth: breadthM,
       height: kingpostM,
-      overhang: { front: overhangM, back: overhangM, left: overhangM, right: overhangM },
+      overhang: { front: 0, back: 0, left: 0, right: 0 },
       roofType,
       wastePercentage: 10,
       polygonVertices: activePoly,
     });
-  }, [lengthM, breadthM, kingpostM, overhangM, roofType, activePoly]);
+  }, [lengthM, breadthM, kingpostM, roofType, activePoly]);
 
   const resetUpload = () => {
     setRawImageUrl(null);
@@ -423,11 +417,11 @@ export default function PaperSketchModal({
   const handleApply = () => {
     if (!onApplyConvertedSketch) return;
     onApplyConvertedSketch({
-      stageId: initialStage,
+      stageId: 'parapet',
       roofType,
       length: Number(lengthM) || 10,
       breadth: Number(breadthM) || 7,
-      overhang: { front: overhangM, back: overhangM, left: overhangM, right: overhangM },
+      overhang: { front: 0, back: 0, left: 0, right: 0 },
       polygonVertices: activePoly,
       kingpostHeight: Number(kingpostM) || 2.2,
       slantingHeight: Number(slopeInfo.slantingHeight) || 4.0,
@@ -788,7 +782,7 @@ export default function PaperSketchModal({
                     unitSystem={unitSystem}
                     polygonVertices={activePoly}
                     isSplitView={false}
-                    buildingStage={initialStage}
+                    buildingStage="parapet"
                     sketchUnderlayImage={null}
                     compactPreview={true}
                     readOnlyMobile={true}
@@ -904,7 +898,7 @@ export default function PaperSketchModal({
             {/* Subtle 1-line summary */}
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
               Footprint: <strong style={{ color: 'var(--text-primary)' }}>{formatLength(lengthM, unitSystem)} × {formatLength(breadthM, unitSystem)}</strong>
-              {' '}— Edit walls, corners & building level in 2D space after applying.
+              {' '}(exact paper size) — Select site measurement level &amp; edit walls in 2D space after applying.
             </div>
 
             {analysisResult?.visionWarning && (
