@@ -855,14 +855,6 @@ export default function SijitekSite() {
             <a href="#products" style={{ color: '#434d56', textDecoration: 'none', fontWeight: 600 }}>
               Products
             </a>
-            {primaryProduct && (
-              <a
-                href={primaryProduct.launchUrl}
-                style={{ color: '#19473a', textDecoration: 'none', fontWeight: 700 }}
-              >
-                {primaryProduct.name} ↗
-              </a>
-            )}
             <span className="sjk-mono">© {new Date().getFullYear()}</span>
           </div>
         </div>

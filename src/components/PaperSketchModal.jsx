@@ -238,7 +238,7 @@ export default function PaperSketchModal({
 
   const activeStage = getStageConfig(initialStage);
 
-  const runSketchAnalysis = async (imgUrl) => {
+  const runSketchAnalysis = async (imgUrl, { preferCached = true } = {}) => {
     setIsAnalyzing(true);
     setAnalysisError('');
     try {
@@ -247,13 +247,14 @@ export default function PaperSketchModal({
         stageId: initialStage,
         unitSystem,
         manualNotesText: '',
+        preferCached,
         isPro: isPremium,
         accessToken: proAccessToken,
       });
 
       setBlueprintUrl(result.blueprintDataUrl || null);
       setAnalysisResult(result);
-      if (result.quota && onQuotaUpdate) {
+      if (result.quota && result.creditCharged !== false && onQuotaUpdate) {
         onQuotaUpdate(result.quota);
       }
 
@@ -334,8 +335,8 @@ export default function PaperSketchModal({
           { silent: true }
         );
       }
-    } catch (err) {
-      setAnalysisError(err?.message || 'Could not scan sketch image.');
+    } catch {
+      setAnalysisError('Could not scan this sketch image. Please try another clear photo.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -909,12 +910,13 @@ export default function PaperSketchModal({
             {analysisResult?.visionWarning && (
               <div
                 style={{
-                  padding: '0.55rem 0.75rem',
-                  borderRadius: '8px',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid rgba(245, 158, 11, 0.35)',
-                  color: '#fde68a',
+                  padding: '0.55rem 0.78rem',
+                  borderRadius: '9px',
+                  background: 'rgba(30, 41, 59, 0.72)',
+                  border: '1px solid rgba(148, 163, 184, 0.28)',
+                  color: '#cbd5e1',
                   fontSize: '0.76rem',
+                  lineHeight: 1.45,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -923,7 +925,7 @@ export default function PaperSketchModal({
                 }}
               >
                 <span>{analysisResult.visionWarning}</span>
-                {analysisResult.visionCode === 'QUOTA_EXCEEDED' && onOpenUpgrade && (
+                {analysisResult.visionCode === 'QUOTA_EXCEEDED' && onOpenUpgrade ? (
                   <button
                     type="button"
                     onClick={onOpenUpgrade}
@@ -941,7 +943,26 @@ export default function PaperSketchModal({
                   >
                     Buy Scan Pack →
                   </button>
-                )}
+                ) : isPremium && rawImageUrl && analysisResult.visionCode !== 'PRO_REQUIRED' ? (
+                  <button
+                    type="button"
+                    disabled={isAnalyzing}
+                    onClick={() => runSketchAnalysis(rawImageUrl, { preferCached: false })}
+                    style={{
+                      background: 'rgba(14, 165, 233, 0.16)',
+                      color: '#7dd3fc',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      borderRadius: '7px',
+                      padding: '0.28rem 0.65rem',
+                      fontSize: '0.73rem',
+                      fontWeight: 700,
+                      cursor: isAnalyzing ? 'wait' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Retry AI
+                  </button>
+                ) : null}
               </div>
             )}
 

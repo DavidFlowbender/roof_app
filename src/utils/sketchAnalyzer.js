@@ -844,7 +844,12 @@ Rules:
     required: ['shapeType', 'roofType', 'polygonVertices', 'detectedLabels', 'confidence', 'notes'],
   };
 
-  const modelsToTry = ['gemini-3-flash-preview', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite-preview'];
+  const modelsToTry = [
+    'gemini-3-flash-preview',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-lite-latest',
+  ];
   let lastError = null;
 
   for (const modelName of modelsToTry) {
@@ -1060,13 +1065,39 @@ async function analyzeWithProBackend({
     throw err;
   }
 
-  const normalized = normalizeGeminiParsedPayload(payload.parsed, `Pro AI (${payload.model || 'Gemini Flash'})`);
+  const normalized = normalizeGeminiParsedPayload(payload.parsed, 'Pro AI Scan');
   return {
     ...normalized,
     engine: 'pro-ai-proxy',
     serverCached: Boolean(payload.cached),
     quota: payload.quota || null,
   };
+}
+
+/**
+ * Turns any backend/network/Gemini error into a short, calm notice for users.
+ * Never exposes raw HTTP codes, Gemini model IDs, or JSON stack details.
+ */
+function formatFriendlyVisionWarning(err) {
+  const code = String(err?.code || '').toUpperCase();
+  const msg = String(err?.message || '');
+
+  if (code === 'QUOTA_EXCEEDED') {
+    return 'All AI scan credits have been used — used standard scan instead. Buy a Scan Pack anytime to re-enable AI reading.';
+  }
+  if (code === 'PRO_REQUIRED') {
+    return 'AI sketch reading requires an active Pro plan — used standard scan instead.';
+  }
+  if (code === 'AUTH_REQUIRED' || code === 'AUTH_INVALID') {
+    return 'Please sign in again to use AI reading — used standard scan instead (no scan credit used).';
+  }
+  if (
+    code === 'AI_BUSY' ||
+    /503|429|high demand|overloaded|timeout|abort/i.test(msg)
+  ) {
+    return 'AI scanner is busy right now — used standard scan instead (no scan credit used).';
+  }
+  return 'AI scanner is temporarily unavailable — used standard scan instead (no scan credit used).';
 }
 
 /**
@@ -1939,7 +1970,7 @@ async function analyzeWithOfflineScanner({
 
   return {
     engine: 'offline-scanner',
-    model: ocrStrings.length > 0 ? 'Canvas CV + Browser OCR' : 'Canvas Contour Scanner',
+    model: ocrStrings.length > 0 ? 'Standard Scan + OCR' : 'Standard Scan',
     shapeType: inferredShape,
     roofType: inferredRoofType,
     length: targetW,
@@ -2110,8 +2141,9 @@ export async function analyzePaperSketch({
       });
       return {
         ...fallback,
-        visionWarning: visionErr?.message || 'Vision API unavailable — used offline scanner.',
-        visionCode: visionErr?.code || null,
+        visionWarning: formatFriendlyVisionWarning(visionErr),
+        visionCode: visionErr?.code || 'AI_BUSY',
+        creditCharged: false,
         blueprintDataUrl: blueprintInfo.blueprintDataUrl,
       };
     }

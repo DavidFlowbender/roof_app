@@ -160,9 +160,11 @@ export default async function handler(req, res) {
   const allowPreviewBypass = process.env.DEV_ALLOW_PRO_PREVIEW === 'true';
 
   if (!geminiKey) {
+    console.warn('[analyze-sketch] Missing GEMINI_API_KEY in environment');
     return res.status(503).json({
       code: 'BACKEND_NOT_CONFIGURED',
-      error: 'Server GEMINI_API_KEY is not configured in Vercel Environment Variables.',
+      creditCharged: false,
+      error: 'AI scanner is temporarily unavailable — used standard scan instead (no scan credit used).',
     });
   }
 
@@ -172,12 +174,18 @@ export default async function handler(req, res) {
   if (usingSupabase) {
     authCheck = await verifySupabaseProUser(req.headers.authorization, supabaseUrl, supabaseServiceKey);
     if (!authCheck.ok) {
-      return res.status(authCheck.status).json({ code: authCheck.code, error: authCheck.error });
+      return res.status(authCheck.status).json({
+        code: authCheck.code,
+        creditCharged: false,
+        error: authCheck.error,
+      });
     }
   } else if (!allowPreviewBypass) {
+    console.warn('[analyze-sketch] Missing Supabase backend environment variables');
     return res.status(503).json({
       code: 'BACKEND_NOT_CONFIGURED',
-      error: 'Supabase backend environment variables are not configured yet.',
+      creditCharged: false,
+      error: 'AI scanner is temporarily unavailable — used standard scan instead (no scan credit used).',
     });
   }
 
@@ -234,8 +242,14 @@ Rules:
     manualNotesText ? ` User note hint: "${String(manualNotesText).slice(0, 120)}".` : ''
   }`;
 
-  const modelsToTry = ['gemini-3-flash-preview', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite-preview'];
+  const modelsToTry = [
+    'gemini-3-flash-preview',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-lite-latest',
+  ];
   let lastError = null;
+  let sawBusyStatus = false;
 
   for (const modelName of modelsToTry) {
     try {
@@ -245,7 +259,7 @@ Rules:
         )}`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(28000),
+          signal: AbortSignal.timeout(22000),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [
@@ -274,6 +288,9 @@ Rules:
       );
 
       if (!resp.ok) {
+        if (resp.status === 429 || resp.status === 503 || resp.status === 504) {
+          sawBusyStatus = true;
+        }
         const errBody = await resp.text();
         lastError = `Gemini (${modelName}) HTTP ${resp.status}: ${errBody.slice(0, 180)}`;
         continue;
@@ -287,6 +304,15 @@ Rules:
       }
 
       const parsed = JSON.parse(rawContent);
+      const hasUsableGeometry =
+        (Array.isArray(parsed?.polygonVertices) && parsed.polygonVertices.length >= 3) ||
+        Number(parsed?.lengthMeters) > 0 ||
+        Number(parsed?.breadthMeters) > 0;
+      if (!hasUsableGeometry) {
+        lastError = `Unusable geometry response from ${modelName}`;
+        continue;
+      }
+
       const responsePayload = { parsed, model: modelName };
 
       let nextUsed = authCheck.used;
@@ -305,6 +331,7 @@ Rules:
       return res.status(200).json({
         ...responsePayload,
         cached: false,
+        creditCharged: true,
         quota: {
           used: nextUsed,
           limit: authCheck.limit,
@@ -313,9 +340,19 @@ Rules:
         },
       });
     } catch (err) {
+      if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+        sawBusyStatus = true;
+      }
       lastError = err?.message || 'Gemini Vision call failed';
     }
   }
 
-  return res.status(502).json({ code: 'UPSTREAM_ERROR', error: lastError || 'Gemini Vision failed' });
+  console.warn('[analyze-sketch] All AI vision models failed (no credit charged):', lastError);
+  return res.status(502).json({
+    code: sawBusyStatus ? 'AI_BUSY' : 'UPSTREAM_ERROR',
+    creditCharged: false,
+    error: sawBusyStatus
+      ? 'AI scanner is busy right now — used standard scan instead (no scan credit used).'
+      : 'AI scanner could not reach the server — used standard scan instead (no scan credit used).',
+  });
 }
