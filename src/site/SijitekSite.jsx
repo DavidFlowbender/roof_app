@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
   Check,
-  Compass,
+  ChevronDown,
   Copy,
   Download,
   Monitor,
@@ -237,6 +237,28 @@ export default function SijitekSite() {
 
   const [guideModal, setGuideModal] = useState(null); // { product, device } | null
   const [copiedId, setCopiedId] = useState('');
+  const [productsMenuOpen, setProductsMenuOpen] = useState(false);
+  const productsMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!productsMenuOpen) return;
+    const onOutside = (e) => {
+      if (productsMenuRef.current && !productsMenuRef.current.contains(e.target)) {
+        setProductsMenuOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setProductsMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onOutside);
+    window.addEventListener('touchstart', onOutside);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onOutside);
+      window.removeEventListener('touchstart', onOutside);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [productsMenuOpen]);
 
   useEffect(() => {
     document.title = 'Sijitek Solutions — Practical Solutions for Engineering & Construction';
@@ -297,18 +319,72 @@ export default function SijitekSite() {
             <a href="#who-it-serves" className="sjk-nav-link">
               Who We Serve
             </a>
-            <a href="#products" className="sjk-nav-link">
-              Products
-            </a>
+
+            {/* Products Hover / Tap Dropdown */}
+            <div
+              ref={productsMenuRef}
+              className={`sjk-nav-dropdown ${productsMenuOpen ? 'is-open' : ''}`}
+              onMouseEnter={() => setProductsMenuOpen(true)}
+              onMouseLeave={() => setProductsMenuOpen(false)}
+            >
+              <button
+                type="button"
+                className="sjk-nav-link sjk-nav-dropdown-trigger"
+                aria-expanded={productsMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setProductsMenuOpen((v) => !v)}
+              >
+                <span>Products</span>
+                <ChevronDown className="w-3.5 h-3.5 sjk-nav-chevron" />
+              </button>
+
+              <div className="sjk-nav-dropdown-bridge" role="menu">
+                <div className="sjk-nav-dropdown-panel">
+                  <div className="sjk-nav-dropdown-head sjk-mono">
+                    <span>SIJITEK PRODUCTS</span>
+                    <span>{String(products.length).padStart(2, '0')} LIVE</span>
+                  </div>
+
+                  <div className="sjk-nav-dropdown-list">
+                    {products.map((product) => (
+                      <a
+                        key={product.id}
+                        href={product.launchUrl}
+                        role="menuitem"
+                        className="sjk-nav-product-item"
+                        onClick={() => setProductsMenuOpen(false)}
+                      >
+                        <div className="sjk-nav-product-top">
+                          <span className="sjk-nav-product-name">{product.name}</span>
+                          <span className="sjk-nav-product-badge sjk-mono">
+                            <span className="sjk-nav-product-dot" />
+                            {product.statusLabel}
+                          </span>
+                        </div>
+                        <span className="sjk-nav-product-cat">{product.category}</span>
+                        <span className="sjk-nav-product-launch">
+                          <span>Launch {product.name}</span>
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+
+                  <a
+                    href="#products"
+                    className="sjk-nav-dropdown-footer"
+                    onClick={() => setProductsMenuOpen(false)}
+                  >
+                    <span>Explore specs &amp; phone install guides</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
             <a href="#approach" className="sjk-nav-link">
               Approach
             </a>
-            {primaryProduct && (
-              <a href={primaryProduct.launchUrl} className="sjk-nav-cta">
-                <span>Launch {primaryProduct.name}</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </a>
-            )}
           </nav>
         </div>
       </header>
