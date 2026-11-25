@@ -162,6 +162,12 @@ export default function ProUpgradeModal({
   useEffect(() => {
     if (!isOpen || !supabaseEnabled || proEmail || !directGoogleSupported) {
       setGoogleBtnReady(false);
+      if (typeof window !== 'undefined') {
+        window.google?.accounts?.id?.cancel?.();
+      }
+      if (googleBtnHostRef.current) {
+        googleBtnHostRef.current.innerHTML = '';
+      }
       return;
     }
     let cancelled = false;
@@ -214,8 +220,13 @@ export default function ProUpgradeModal({
       }
     })();
 
+    const hostEl = googleBtnHostRef.current;
     return () => {
       cancelled = true;
+      if (hostEl) hostEl.innerHTML = '';
+      if (typeof window !== 'undefined') {
+        window.google?.accounts?.id?.cancel?.();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, supabaseEnabled, proEmail, directGoogleSupported]);
@@ -446,7 +457,6 @@ export default function ProUpgradeModal({
   const actualDiscountKobo = Math.max(0, selectedPlan.amountKobo - computedFinalKobo);
   const hasDiscount = Boolean(appliedReferral && actualDiscountKobo > 0);
   const displayFinalPrice = formatKoboAsCurrency(hasDiscount ? computedFinalKobo : selectedPlan.amountKobo, currency);
-  const displayBasePrice = formatKoboAsCurrency(selectedPlan.amountKobo, currency);
   const isCheckoutBusy = Boolean(checkoutBusyId);
   const formattedPlanExpiry = (() => {
     if (!isPremium || isAdminAccount) return '';
@@ -460,7 +470,15 @@ export default function ProUpgradeModal({
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content paper-sketch-modal-card"
-        style={{ maxWidth: '480px', width: '94vw', padding: '1.35rem', maxHeight: '90vh', overflowY: 'auto' }}
+        style={{
+          maxWidth: '480px',
+          width: '94vw',
+          padding: '1.15rem',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          boxSizing: 'border-box',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -482,41 +500,41 @@ export default function ProUpgradeModal({
           </button>
         </div>
 
-        {/* Core Pro Features */}
+        {/* Core Pro Features (Calm, easy-to-read dark slate card) */}
         <div
           style={{
-            padding: '0.85rem',
-            borderRadius: '12px',
-            background: 'rgba(245, 158, 11, 0.08)',
-            border: '1px solid rgba(245, 158, 11, 0.28)',
+            padding: '0.85rem 0.9rem',
+            borderRadius: '11px',
+            background: 'rgba(15, 23, 42, 0.72)',
+            border: '1px solid rgba(51, 65, 85, 0.75)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
-            marginBottom: '1rem',
+            gap: '0.52rem',
+            marginBottom: '0.9rem',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
-            <Sparkles size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.79rem', lineHeight: 1.45, color: '#94a3b8' }}>
+            <Sparkles size={14} style={{ color: '#38bdf8', opacity: 0.9, flexShrink: 0, marginTop: '3px' }} />
             <span>
-              <strong>AI Sketch Auto-Dimension:</strong> Includes {selectedPlan.includedScans} AI scan credits on {selectedPlan.name}; buy extra scans anytime at will (credits never expire).
+              <strong style={{ color: '#e2e8f0', fontWeight: 600 }}>AI Sketch Auto-Dimension:</strong> Includes {selectedPlan.includedScans} AI scans on {selectedPlan.name}; top up anytime (credits never expire).
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
-            <CheckCircle2 size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.79rem', lineHeight: 1.45, color: '#94a3b8' }}>
+            <CheckCircle2 size={14} style={{ color: '#34d399', opacity: 0.85, flexShrink: 0, marginTop: '3px' }} />
             <span>
-              <strong>Full Woodwork &amp; Timber BOQ:</strong> Unlocked rafter, purlin, kingpost, tie beam, and carpenter cost schedules.
+              <strong style={{ color: '#e2e8f0', fontWeight: 600 }}>Full Woodwork &amp; Timber BOQ:</strong> 3D framing, rafter, purlin, kingpost, tie-beam &amp; carpenter cost schedules.
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
-            <CheckCircle2 size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.79rem', lineHeight: 1.45, color: '#94a3b8' }}>
+            <CheckCircle2 size={14} style={{ color: '#34d399', opacity: 0.85, flexShrink: 0, marginTop: '3px' }} />
             <span>
-              <strong>Water Collector (WC) BOQ &amp; Downpipe Quotations:</strong> Unlocked rain gutter runs, corner miters (90°/135°/45°), floor drop pipes, elbows, and PDF exports.
+              <strong style={{ color: '#e2e8f0', fontWeight: 600 }}>Water Collector (WC) BOQ &amp; 3D Drops:</strong> Rain gutter runs, corner miters (90°/135°/45°), floor pipes &amp; PDF exports.
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
-            <CheckCircle2 size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.79rem', lineHeight: 1.45, color: '#94a3b8' }}>
+            <CheckCircle2 size={14} style={{ color: '#34d399', opacity: 0.85, flexShrink: 0, marginTop: '3px' }} />
             <span>
-              <strong>Company Info, PDF Logo &amp; Permanent Saved Prices:</strong> Upload your company logo, set your contractor name &amp; phone once, and save your custom material prices permanently to your account across devices.
+              <strong style={{ color: '#e2e8f0', fontWeight: 600 }}>Company Branding &amp; Saved Prices:</strong> Upload your PDF logo once and save your custom material rates across devices.
             </span>
           </div>
         </div>
@@ -526,6 +544,7 @@ export default function ProUpgradeModal({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             {isPasswordRecovery && proAccessToken ? (
               <form
+                key="pro-recovery-view"
                 onSubmit={handleUpdateRecoveredPassword}
                 style={{
                   padding: '1rem',
@@ -595,6 +614,7 @@ export default function ProUpgradeModal({
               </form>
             ) : proEmail ? (
               <div
+                key="pro-signed-in-view"
                 style={{
                   padding: '0.9rem',
                   borderRadius: '10px',
@@ -775,9 +795,9 @@ export default function ProUpgradeModal({
                   </div>
                 ) : (
                   /* Free Plan: 3-Tier Prepaid Ladder (30-Day, Annual, Founding Lifetime) + Referral Discount */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-                    {/* 3-Tier Plan Selector */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.45rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {/* Clean Stacked Horizontal Plan Rows (zero overflow on mobile or desktop) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       {availablePlans.map((plan) => {
                         const isSelected = plan.id === selectedPlan.id;
                         const planDiscKobo =
@@ -791,120 +811,114 @@ export default function ProUpgradeModal({
                             disabled={isCheckoutBusy}
                             onClick={() => setSelectedPlanId(plan.id)}
                             style={{
+                              width: '100%',
+                              boxSizing: 'border-box',
                               display: 'flex',
-                              flexDirection: 'column',
                               alignItems: 'center',
                               justifyContent: 'space-between',
-                              gap: '0.26rem',
-                              padding: '0.62rem 0.35rem',
-                              borderRadius: '10px',
+                              gap: '0.65rem',
+                              padding: '0.72rem 0.82rem',
+                              borderRadius: '11px',
                               border: `1.5px solid ${
                                 isSelected
                                   ? '#10b981'
                                   : isPopular
-                                    ? 'rgba(245, 158, 11, 0.5)'
+                                    ? 'rgba(245, 158, 11, 0.48)'
                                     : 'var(--border-color)'
                               }`,
                               background: isSelected
-                                ? 'rgba(16, 185, 129, 0.14)'
+                                ? 'rgba(16, 185, 129, 0.13)'
                                 : isPopular
-                                  ? 'rgba(245, 158, 11, 0.08)'
+                                  ? 'rgba(245, 158, 11, 0.06)'
                                   : 'rgba(2, 6, 23, 0.5)',
                               color: 'var(--text-primary)',
                               cursor: isCheckoutBusy ? 'wait' : 'pointer',
-                              textAlign: 'center',
+                              textAlign: 'left',
                               transition: 'border-color 0.15s ease, background 0.15s ease',
                             }}
                           >
-                            <span
+                            {/* Left: Radio + Name + Badge + Subtitle */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', minWidth: 0, flex: 1 }}>
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  marginTop: '2px',
+                                  borderRadius: '50%',
+                                  flexShrink: 0,
+                                  border: `2px solid ${isSelected ? '#10b981' : '#475569'}`,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {isSelected && (
+                                  <span
+                                    style={{
+                                      width: '8px',
+                                      height: '8px',
+                                      borderRadius: '50%',
+                                      background: '#10b981',
+                                    }}
+                                  />
+                                )}
+                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#f8fafc', lineHeight: 1.2 }}>
+                                    {plan.name}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: '0.6rem',
+                                      fontWeight: 800,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.03em',
+                                      padding: '0.12rem 0.42rem',
+                                      borderRadius: '999px',
+                                      background: isSelected
+                                        ? 'rgba(16, 185, 129, 0.24)'
+                                        : isPopular
+                                          ? 'rgba(245, 158, 11, 0.2)'
+                                          : 'rgba(56, 189, 248, 0.14)',
+                                      color: isSelected ? '#6ee7b7' : isPopular ? '#fbbf24' : '#7dd3fc',
+                                    }}
+                                  >
+                                    {plan.badge}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                                  {plan.subtitle} • <strong style={{ color: '#38bdf8' }}>+{plan.includedScans} AI scans</strong>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right: Price + Period */}
+                            <div
                               style={{
-                                fontSize: '0.6rem',
-                                fontWeight: 800,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.03em',
-                                padding: '0.12rem 0.38rem',
-                                borderRadius: '999px',
-                                background: isSelected
-                                  ? 'rgba(16, 185, 129, 0.24)'
-                                  : isPopular
-                                    ? 'rgba(245, 158, 11, 0.2)'
-                                    : 'rgba(56, 189, 248, 0.14)',
-                                color: isSelected ? '#6ee7b7' : isPopular ? '#fbbf24' : '#7dd3fc',
-                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-end',
+                                flexShrink: 0,
+                                textAlign: 'right',
                               }}
                             >
-                              {plan.badge}
-                            </span>
-                            <span style={{ fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.15 }}>
-                              {plan.name}
-                            </span>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.05rem' }}>
                               {hasDiscount && (
-                                <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textDecoration: 'line-through', lineHeight: 1.1 }}>
                                   {formatKoboAsCurrency(plan.amountKobo, currency)}
                                 </span>
                               )}
-                              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: isSelected ? '#34d399' : '#f8fafc' }}>
+                              <span style={{ fontSize: '0.98rem', fontWeight: 800, color: isSelected ? '#34d399' : '#f8fafc', lineHeight: 1.15 }}>
                                 {formatKoboAsCurrency(hasDiscount ? planFinalKobo : plan.amountKobo, currency)}
                               </span>
-                              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', lineHeight: 1.2 }}>
                                 {plan.periodLabel}
                               </span>
                             </div>
-                            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#38bdf8' }}>
-                              +{plan.includedScans} AI scans
-                            </span>
                           </button>
                         );
                       })}
-                    </div>
-
-                    {/* Selected Plan Summary Banner */}
-                    <div
-                      style={{
-                        padding: '0.68rem 0.8rem',
-                        borderRadius: '9px',
-                        background: hasDiscount ? 'rgba(16, 185, 129, 0.1)' : 'rgba(2, 6, 23, 0.45)',
-                        border: `1px solid ${hasDiscount ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-color)'}`,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '0.4rem',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          <strong>{selectedPlan.name}</strong> • {selectedPlan.subtitle} • {selectedPlan.includedScans} AI scans
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', marginTop: '0.12rem' }}>
-                          {hasDiscount && (
-                            <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
-                              {displayBasePrice}
-                            </span>
-                          )}
-                          <span style={{ fontSize: '1.16rem', fontWeight: 800, color: hasDiscount ? '#34d399' : '#f8fafc' }}>
-                            {displayFinalPrice}
-                          </span>
-                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            {selectedPlan.periodLabel}
-                          </span>
-                        </div>
-                      </div>
-                      {hasDiscount && (
-                        <span
-                          style={{
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '999px',
-                            background: 'rgba(16, 185, 129, 0.2)',
-                            color: '#34d399',
-                          }}
-                        >
-                          {discountPercent}% OFF • {appliedReferral.code}
-                        </span>
-                      )}
                     </div>
 
                     {/* Referral / Promo Code Input */}
@@ -923,7 +937,7 @@ export default function ProUpgradeModal({
                           style={{
                             flex: 1,
                             minWidth: 0,
-                            padding: '0.45rem 0.65rem',
+                            padding: '0.48rem 0.65rem',
                             borderRadius: '8px',
                             border: '1px solid var(--border-color)',
                             background: 'rgba(2, 6, 23, 0.55)',
@@ -938,7 +952,7 @@ export default function ProUpgradeModal({
                             type="button"
                             className="btn-secondary-action"
                             onClick={handleClearReferral}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.45rem 0.65rem', fontSize: '0.76rem' }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.48rem 0.65rem', fontSize: '0.76rem' }}
                           >
                             <X size={13} />
                             Remove
@@ -948,7 +962,7 @@ export default function ProUpgradeModal({
                             type="submit"
                             className="btn-secondary-action"
                             disabled={referralBusy || !referralInput.trim()}
-                            style={{ padding: '0.45rem 0.75rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                            style={{ padding: '0.48rem 0.85rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
                           >
                             {referralBusy ? <Loader2 size={13} className="animate-spin" /> : 'Apply'}
                           </button>
@@ -956,8 +970,8 @@ export default function ProUpgradeModal({
                       </div>
                       {appliedReferral && (
                         <div style={{ fontSize: '0.73rem', color: '#34d399' }}>
-                          Code <strong>{appliedReferral.code}</strong> applied
-                          {appliedReferral.influencerName ? ` (${appliedReferral.influencerName})` : ''} — you save{' '}
+                          Code <strong>{appliedReferral.code}</strong> applied ({discountPercent}% off)
+                          {appliedReferral.influencerName ? ` • ${appliedReferral.influencerName}` : ''} — you save{' '}
                           {formatKoboAsCurrency(actualDiscountKobo, currency)} on {selectedPlan.name}!
                         </div>
                       )}
@@ -966,23 +980,26 @@ export default function ProUpgradeModal({
                       )}
                     </form>
 
-                    {/* Checkout & Refresh Buttons */}
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    {/* Full-Width Checkout CTA + Compact Refresh */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                       <button
                         type="button"
                         className="btn-primary-action"
                         onClick={handleStartProCheckout}
                         disabled={isCheckoutBusy}
                         style={{
+                          width: '100%',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '0.4rem',
-                          fontSize: '0.82rem',
+                          justifyContent: 'center',
+                          gap: '0.45rem',
+                          fontSize: '0.86rem',
+                          padding: '0.72rem 1rem',
                         }}
                       >
                         {checkoutBusyId === 'pro_upgrade' ? (
                           <>
-                            <Loader2 size={14} className="animate-spin" />
+                            <Loader2 size={15} className="animate-spin" />
                             <span>Redirecting to Paystack...</span>
                           </>
                         ) : (
@@ -999,14 +1016,22 @@ export default function ProUpgradeModal({
                         className="btn-secondary-action"
                         onClick={onRefreshStatus}
                         disabled={isCheckoutBusy}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}
+                        style={{
+                          width: '100%',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.35rem',
+                          fontSize: '0.78rem',
+                          padding: '0.52rem 0.9rem',
+                        }}
                       >
-                        <RefreshCw size={14} />
-                        Refresh Status
+                        <RefreshCw size={13} />
+                        Already paid? Refresh Pro Status
                       </button>
                     </div>
-                    <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      Pay easily via Bank Transfer, OPay, USSD, or Card on Paystack. No forced auto-renewals.
+                    <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', lineHeight: 1.4, textAlign: 'center' }}>
+                      Pay via Bank Transfer, OPay, USSD, or Card on Paystack. No forced auto-renewals.
                     </div>
                     {errorMsg && (
                       <div style={{ fontSize: '0.76rem', color: '#f87171', lineHeight: 1.4 }}>
@@ -1037,7 +1062,7 @@ export default function ProUpgradeModal({
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div key="pro-guest-auth-view" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {appliedReferral && (
                   <div
                     style={{
