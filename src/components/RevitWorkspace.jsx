@@ -5,6 +5,7 @@ import {
   Building2,
   Calculator,
   Camera,
+  Check,
   ChevronDown,
   Crown,
   Download,
@@ -15,6 +16,7 @@ import {
   Lock,
   LogIn,
   LogOut,
+  Pencil,
   Plus,
   RotateCcw,
   Ruler,
@@ -122,10 +124,21 @@ export default function RevitWorkspace({
     () => typeof window !== 'undefined' && window.innerWidth < 768
   );
   // Inline custom material row composer (Desktop BOQ & WC Quote)
+  const [isEditingPrices, setIsEditingPrices] = useState(false);
+  const [priceSavedFlash, setPriceSavedFlash] = useState(false);
   const [newRowName, setNewRowName] = useState('');
   const [newRowQty, setNewRowQty] = useState('1');
   const [newRowUnit, setNewRowUnit] = useState('pcs');
   const [newRowPrice, setNewRowPrice] = useState('');
+
+  const handleSaveDesktopPrices = () => {
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setIsEditingPrices(false);
+    setPriceSavedFlash(true);
+    setTimeout(() => setPriceSavedFlash(false), 2500);
+  };
 
   const handleAddDesktopCustomRow = (scope, e) => {
     if (e) e.preventDefault();
@@ -911,21 +924,22 @@ export default function RevitWorkspace({
             <div className="studio-stepper" style={{ gap: '2px' }}>
               <button
                 type="button"
-                onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry.pitchDegrees || 30) - 1))}
+                onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(roofType === 'shed' || roofType === 'flat' ? 2 : 5, (geometry.pitchDegrees || 30) - 1))}
                 title="Decrease pitch angle"
               >
                 &minus;
               </button>
               <input
                 type="number"
-                min="5"
+                min={roofType === 'shed' || roofType === 'flat' ? 2 : 5}
                 max="68"
                 step="1"
                 aria-label="Roof pitch angle (degrees)"
                 value={Number(geometry.pitchDegrees || 0)}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                  const minDeg = roofType === 'shed' || roofType === 'flat' ? 2 : 5;
+                  if (Number.isFinite(v) && v >= minDeg && handleTweakPitchAngle) handleTweakPitchAngle(v);
                 }}
                 style={{
                   width: '42px',
@@ -1312,7 +1326,7 @@ export default function RevitWorkspace({
                 </div>
               </div>
 
-              {/* Quick Price Settings: Labour, Transport & Reset (Auto-saved) */}
+              {/* Quick Price Settings: Labour, Transport & Edit/Save Toggle */}
               <div
                 style={{
                   display: 'flex',
@@ -1330,39 +1344,65 @@ export default function RevitWorkspace({
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#cbd5e1' }}>
                     <span>Labour / m² ({currencyCode}):</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={customPrices.laborPerM2 !== undefined ? customPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
-                      onChange={(e) => setCustomPrices({ ...customPrices, laborPerM2: e.target.value })}
-                      style={{
-                        width: '92px',
-                        padding: '4px 8px',
-                        fontSize: '12px',
-                        background: '#090e1a',
-                        color: '#f8fafc',
-                        border: '1px solid #334155',
-                        borderRadius: '6px',
-                      }}
-                    />
+                    {isPremium && isEditingPrices ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={customPrices.laborPerM2 !== undefined ? customPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
+                        onChange={(e) => setCustomPrices({ ...customPrices, laborPerM2: e.target.value })}
+                        style={{
+                          width: '92px',
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          background: '#090e1a',
+                          color: '#f8fafc',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                        }}
+                      />
+                    ) : (
+                      <strong style={{ color: '#f8fafc', fontSize: '12.5px' }}>
+                        {formatCurrency(
+                          customPrices.laborPerM2 !== undefined && customPrices.laborPerM2 !== ''
+                            ? Number(customPrices.laborPerM2)
+                            : currencyCode === 'NGN'
+                            ? 1500
+                            : 3.5,
+                          currencyCode
+                        )}
+                      </strong>
+                    )}
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#cbd5e1' }}>
                     <span>Transport ({currencyCode}):</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={customPrices.transport !== undefined ? customPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
-                      onChange={(e) => setCustomPrices({ ...customPrices, transport: e.target.value })}
-                      style={{
-                        width: '100px',
-                        padding: '4px 8px',
-                        fontSize: '12px',
-                        background: '#090e1a',
-                        color: '#f8fafc',
-                        border: '1px solid #334155',
-                        borderRadius: '6px',
-                      }}
-                    />
+                    {isPremium && isEditingPrices ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={customPrices.transport !== undefined ? customPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
+                        onChange={(e) => setCustomPrices({ ...customPrices, transport: e.target.value })}
+                        style={{
+                          width: '100px',
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          background: '#090e1a',
+                          color: '#f8fafc',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                        }}
+                      />
+                    ) : (
+                      <strong style={{ color: '#f8fafc', fontSize: '12.5px' }}>
+                        {formatCurrency(
+                          customPrices.transport !== undefined && customPrices.transport !== ''
+                            ? Number(customPrices.transport)
+                            : currencyCode === 'NGN'
+                            ? 25000
+                            : 50,
+                          currencyCode
+                        )}
+                      </strong>
+                    )}
                   </label>
                   {setWastePercentage && (
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#cbd5e1' }}>
@@ -1392,33 +1432,64 @@ export default function RevitWorkspace({
                       />
                     </label>
                   )}
-                  <span style={{ fontSize: '11px', color: isPremium && priceSyncStatus === 'saved' ? '#34d399' : '#64748b' }}>
+                  <span style={{ fontSize: '11px', color: isPremium && (priceSavedFlash || priceSyncStatus === 'saved') ? '#34d399' : '#64748b' }}>
                     {isPremium
-                      ? priceSyncStatus === 'saving'
+                      ? priceSavedFlash
+                        ? '✓ Prices saved to your Pro account!'
+                        : priceSyncStatus === 'saving'
                         ? 'Saving prices to your Pro account...'
                         : priceSyncStatus === 'error'
                         ? 'Saved locally • Cloud sync retrying on next edit'
-                        : '✓ Prices saved permanently to your Pro account • Set 0 to hide item'
+                        : isEditingPrices
+                        ? 'Editing prices • Click Save when done (set 0 to hide item)'
+                        : '✓ Prices saved permanently to your Pro account'
                       : 'Default market prices shown • Upgrade to Pro to edit prices & company branding'}
                   </span>
                 </div>
-                {isPremium && Object.keys(customPrices || {}).length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomPrices({})}
-                    style={{
-                      padding: '5px 10px',
-                      fontSize: '11.5px',
-                      fontWeight: 600,
-                      background: '#1e293b',
-                      color: '#cbd5e1',
-                      border: '1px solid #334155',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Reset Default Prices
-                  </button>
+                {isPremium && (
+                  isEditingPrices ? (
+                    <button
+                      type="button"
+                      onClick={handleSaveDesktopPrices}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '6px 13px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        background: '#10b981',
+                        color: '#052e16',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Check size={14} />
+                      <span>Save</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingPrices(true)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '5px 11px',
+                        fontSize: '11.5px',
+                        fontWeight: 700,
+                        background: '#1e293b',
+                        color: '#38bdf8',
+                        border: '1px solid #334155',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Pencil size={12} />
+                      <span>Edit Prices</span>
+                    </button>
+                  )
                 )}
               </div>
 
@@ -1486,7 +1557,7 @@ export default function RevitWorkspace({
                         <td style={{ color: '#64748b' }}>{idx + 1}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            {isPremium ? (
+                            {isPremium && isEditingPrices ? (
                               <input
                                 type="text"
                                 aria-label={`Edit name for ${item.defaultName || item.name}`}
@@ -1568,7 +1639,7 @@ export default function RevitWorkspace({
                         <td className="boq-qty">{item.quantity.toLocaleString()}</td>
                         <td>{item.unit}</td>
                         <td>
-                          {isPremium ? (
+                          {isPremium && isEditingPrices ? (
                             <input
                               type="number"
                               className="boq-price-input"
@@ -1590,6 +1661,10 @@ export default function RevitWorkspace({
                                 })
                               }
                             />
+                          ) : isPremium ? (
+                            <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                              {formatCurrency(item.unitPrice, currencyCode)}
+                            </span>
                           ) : (
                             <span
                               title="Upgrade to RoofCalc Pro to customize material prices"
@@ -1610,7 +1685,7 @@ export default function RevitWorkspace({
                         <td className="boq-price">
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                             <span>{formatCurrency(item.total, currencyCode)}</span>
-                            {item.isCustom && (
+                            {item.isCustom && isEditingPrices && (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteDesktopCustomRow(item.id)}
@@ -1643,7 +1718,7 @@ export default function RevitWorkspace({
                         <td className="boq-qty">—</td>
                         <td>—</td>
                         <td>
-                          {isPremium ? (
+                          {isPremium && isEditingPrices ? (
                             <input
                               type="number"
                               min="0"
@@ -1667,6 +1742,17 @@ export default function RevitWorkspace({
                                 })
                               }
                             />
+                          ) : isPremium ? (
+                            <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                              {formatCurrency(
+                                customPrices.laborPerM2 !== undefined && customPrices.laborPerM2 !== ''
+                                  ? Number(customPrices.laborPerM2)
+                                  : currencyCode === 'NGN'
+                                  ? 1500
+                                  : 3.5,
+                                currencyCode
+                              )}
+                            </span>
                           ) : (
                             <span
                               title="Upgrade to RoofCalc Pro to customize labor rate"
@@ -1701,7 +1787,7 @@ export default function RevitWorkspace({
                         <td className="boq-qty">—</td>
                         <td>—</td>
                         <td>
-                          {isPremium ? (
+                          {isPremium && isEditingPrices ? (
                             <input
                               type="number"
                               min="0"
@@ -1725,6 +1811,17 @@ export default function RevitWorkspace({
                                 })
                               }
                             />
+                          ) : isPremium ? (
+                            <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                              {formatCurrency(
+                                customPrices.transport !== undefined && customPrices.transport !== ''
+                                  ? Number(customPrices.transport)
+                                  : currencyCode === 'NGN'
+                                  ? 25000
+                                  : 50,
+                                currencyCode
+                              )}
+                            </span>
                           ) : (
                             <span
                               title="Upgrade to RoofCalc Pro to customize transport fee"
@@ -1752,6 +1849,7 @@ export default function RevitWorkspace({
               </div>
 
               {isPremium ? (
+              isEditingPrices ? (
               <form
                 onSubmit={(e) => handleAddDesktopCustomRow(buildingStage === 'woodwork' ? 'wood' : 'roof', e)}
                 style={{
@@ -1816,6 +1914,7 @@ export default function RevitWorkspace({
                   + Add Row
                 </button>
               </form>
+              ) : null
               ) : (
                 <div
                   style={{
@@ -2392,6 +2491,51 @@ export default function RevitWorkspace({
                         >
                           + Add Drop
                         </button>
+                        {isEditingPrices ? (
+                          <button
+                            type="button"
+                            onClick={handleSaveDesktopPrices}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 11px',
+                              borderRadius: '6px',
+                              background: '#10b981',
+                              color: '#052e16',
+                              border: 'none',
+                              fontSize: '11.5px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              marginLeft: '6px',
+                            }}
+                          >
+                            <Check size={13} />
+                            <span>Save</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPrices(true)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              background: '#1e293b',
+                              color: '#38bdf8',
+                              border: '1px solid #334155',
+                              fontSize: '11.5px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              marginLeft: '6px',
+                            }}
+                          >
+                            <Pencil size={11} />
+                            <span>Edit Prices</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2414,70 +2558,80 @@ export default function RevitWorkspace({
                           <tr key={item.id}>
                             <td style={{ color: '#64748b' }}>{idx + 1}</td>
                             <td>
-                              <input
-                                type="text"
-                                aria-label={`Edit WC name for ${item.defaultName || item.name}`}
-                                placeholder={item.defaultName || item.name}
-                                value={
-                                  item.isCustom
-                                    ? item.name
-                                    : customPrices?.__customNames?.[item.id] !== undefined
-                                    ? customPrices.__customNames[item.id]
-                                    : item.name
-                                }
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (item.isCustom) {
-                                    const prevList = Array.isArray(customPrices?.__extraItems)
-                                      ? customPrices.__extraItems
-                                      : [];
-                                    setCustomPrices({
-                                      ...(customPrices || {}),
-                                      __extraItems: prevList.map((ci) =>
-                                        ci.id === item.id ? { ...ci, name: val } : ci
-                                      ),
-                                    });
-                                  } else {
-                                    setCustomPrices({
-                                      ...(customPrices || {}),
-                                      __customNames: {
-                                        ...(customPrices?.__customNames || {}),
-                                        [item.id]: val,
-                                      },
-                                    });
+                              {isEditingPrices ? (
+                                <input
+                                  type="text"
+                                  aria-label={`Edit WC name for ${item.defaultName || item.name}`}
+                                  placeholder={item.defaultName || item.name}
+                                  value={
+                                    item.isCustom
+                                      ? item.name
+                                      : customPrices?.__customNames?.[item.id] !== undefined
+                                      ? customPrices.__customNames[item.id]
+                                      : item.name
                                   }
-                                }}
-                                style={{
-                                  width: '100%',
-                                  maxWidth: '300px',
-                                  background: 'rgba(15, 23, 42, 0.55)',
-                                  color: '#f8fafc',
-                                  border: '1px solid rgba(51, 65, 85, 0.75)',
-                                  borderRadius: '6px',
-                                  padding: '3px 8px',
-                                  fontSize: '12.5px',
-                                  fontWeight: 700,
-                                  marginBottom: '2px',
-                                }}
-                              />
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (item.isCustom) {
+                                      const prevList = Array.isArray(customPrices?.__extraItems)
+                                        ? customPrices.__extraItems
+                                        : [];
+                                      setCustomPrices({
+                                        ...(customPrices || {}),
+                                        __extraItems: prevList.map((ci) =>
+                                          ci.id === item.id ? { ...ci, name: val } : ci
+                                        ),
+                                      });
+                                    } else {
+                                      setCustomPrices({
+                                        ...(customPrices || {}),
+                                        __customNames: {
+                                          ...(customPrices?.__customNames || {}),
+                                          [item.id]: val,
+                                        },
+                                      });
+                                    }
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    maxWidth: '300px',
+                                    background: 'rgba(15, 23, 42, 0.55)',
+                                    color: '#f8fafc',
+                                    border: '1px solid rgba(51, 65, 85, 0.75)',
+                                    borderRadius: '6px',
+                                    padding: '3px 8px',
+                                    fontSize: '12.5px',
+                                    fontWeight: 700,
+                                    marginBottom: '2px',
+                                  }}
+                                />
+                              ) : (
+                                <div className="boq-item-title">{item.name}</div>
+                              )}
                               <div className="boq-item-spec">{item.spec}</div>
                             </td>
                             <td className="boq-qty">{item.quantity.toLocaleString()}</td>
                             <td>{item.unit}</td>
                             <td>
-                              <input
-                                type="number"
-                                min="0"
-                                className="boq-price-input"
-                                style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
-                                value={customPrices[item.id] !== undefined ? customPrices[item.id] : item.unitPrice}
-                                onChange={(e) => setCustomPrices({ ...customPrices, [item.id]: e.target.value })}
-                              />
+                              {isEditingPrices ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  className="boq-price-input"
+                                  style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                  value={customPrices[item.id] !== undefined ? customPrices[item.id] : item.unitPrice}
+                                  onChange={(e) => setCustomPrices({ ...customPrices, [item.id]: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                                  {formatCurrency(item.unitPrice, currencyCode)}
+                                </span>
+                              )}
                             </td>
                             <td className="boq-price">
                               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                                 <span>{formatCurrency(item.total, currencyCode)}</span>
-                                {item.isCustom && (
+                                {item.isCustom && isEditingPrices && (
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteDesktopCustomRow(item.id)}
@@ -2510,13 +2664,24 @@ export default function RevitWorkspace({
                             <td className="boq-qty">—</td>
                             <td>—</td>
                             <td>
-                              <input
-                                type="number"
-                                min="0"
-                                style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
-                                value={customPrices.wc_labor !== undefined ? customPrices.wc_labor : wcMaterials.summary.laborUnitPrice}
-                                onChange={(e) => setCustomPrices({ ...customPrices, wc_labor: e.target.value })}
-                              />
+                              {isEditingPrices ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                  value={customPrices.wc_labor !== undefined ? customPrices.wc_labor : wcMaterials.summary.laborUnitPrice}
+                                  onChange={(e) => setCustomPrices({ ...customPrices, wc_labor: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                                  {formatCurrency(
+                                    customPrices.wc_labor !== undefined && customPrices.wc_labor !== ''
+                                      ? Number(customPrices.wc_labor)
+                                      : wcMaterials.summary.laborUnitPrice,
+                                    currencyCode
+                                  )}
+                                </span>
+                              )}
                             </td>
                             <td className="boq-price">{formatCurrency(wcMaterials.summary.laborTotal, currencyCode)}</td>
                           </tr>
@@ -2531,13 +2696,24 @@ export default function RevitWorkspace({
                             <td className="boq-qty">—</td>
                             <td>—</td>
                             <td>
-                              <input
-                                type="number"
-                                min="0"
-                                style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
-                                value={customPrices.wc_transport !== undefined ? customPrices.wc_transport : wcMaterials.summary.transportTotal}
-                                onChange={(e) => setCustomPrices({ ...customPrices, wc_transport: e.target.value })}
-                              />
+                              {isEditingPrices ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                  value={customPrices.wc_transport !== undefined ? customPrices.wc_transport : wcMaterials.summary.transportTotal}
+                                  onChange={(e) => setCustomPrices({ ...customPrices, wc_transport: e.target.value })}
+                                />
+                              ) : (
+                                <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                                  {formatCurrency(
+                                    customPrices.wc_transport !== undefined && customPrices.wc_transport !== ''
+                                      ? Number(customPrices.wc_transport)
+                                      : wcMaterials.summary.transportTotal,
+                                    currencyCode
+                                  )}
+                                </span>
+                              )}
                             </td>
                             <td className="boq-price">{formatCurrency(wcMaterials.summary.transportTotal, currencyCode)}</td>
                           </tr>
@@ -2546,6 +2722,7 @@ export default function RevitWorkspace({
                     </table>
                   </div>
 
+                  {isEditingPrices && (
                   <form
                     onSubmit={(e) => handleAddDesktopCustomRow('wc', e)}
                     style={{
@@ -2610,6 +2787,7 @@ export default function RevitWorkspace({
                       + Add Row
                     </button>
                   </form>
+                  )}
 
                   <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>
                 <strong>Disclaimer:</strong> Default material prices are generic reference estimates and may not reflect actual local market prices.

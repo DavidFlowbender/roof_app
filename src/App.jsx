@@ -41,6 +41,7 @@ import confetti from 'canvas-confetti';
 
 import {
   ROOF_TYPES,
+  ROOF_TYPE_DEFAULT_ANGLES,
   PITCH_PRESETS,
   calculateRoofHeight,
   calculateRoofGeometry,
@@ -170,6 +171,7 @@ export default function App() {
   const classicProfileMenuRef = useRef(null);
   const [proSession, setProSession] = useState(() => getStoredAuthSession());
   const [proQuota, setProQuota] = useState(() => getStoredProStatus()?.quota || null);
+  const [proPlanExpiresAt, setProPlanExpiresAt] = useState(() => getStoredProStatus()?.planExpiresAt ?? null);
   const [isPremium, setIsPremium] = useState(() =>
     isSupabaseConfigured()
       ? Boolean(getStoredProStatus()?.isPro || isAdminEmail(getStoredAuthSession()?.user?.email))
@@ -303,6 +305,7 @@ export default function App() {
     }
     setIsPremium(finalStatus.isPro);
     setProQuota(finalStatus.quota);
+    setProPlanExpiresAt(finalStatus.planExpiresAt ?? null);
     hydrateAccountFromProfile(finalStatus.session || verifiedSession, finalStatus);
   };
 
@@ -336,6 +339,7 @@ export default function App() {
       }
       setIsPremium(finalStatus.isPro);
       setProQuota(finalStatus.quota);
+      setProPlanExpiresAt(finalStatus.planExpiresAt ?? null);
       hydrateAccountFromProfile(finalStatus.session || activeSession, finalStatus);
       syncDevAuthSession(finalStatus.session || activeSession);
 
@@ -375,6 +379,7 @@ export default function App() {
     setProSession(null);
     setIsPremium(false);
     setProQuota(null);
+    setProPlanExpiresAt(null);
     setCustomPrices(getAccountCustomPrices(null));
     setContractorInfo(getAccountContractorProfile(null));
     try {
@@ -450,7 +455,11 @@ export default function App() {
   }); // Direct coupled Kingpost/Slanting height override (in meters)
 
   // Roof Geometry State (Stored internally in Meters)
-  const [roofType, setRoofType] = useState(() => readStoredActiveDesign()?.roofType || 'hip');
+  const [roofType, setRoofType] = useState(() => {
+    const saved = readStoredActiveDesign()?.roofType;
+    return saved === 'flat' ? 'shed' : saved || 'hip';
+  });
+  const roofTypeAnglesRef = useRef({ ...ROOF_TYPE_DEFAULT_ANGLES });
   const [length, setLength] = useState(() => Number(readStoredActiveDesign()?.length) || 12.0);
   const [breadth, setBreadth] = useState(() => Number(readStoredActiveDesign()?.breadth) || 8.0);
   const [foundationOverhangM, setFoundationOverhangM] = useState(() => {
@@ -844,6 +853,34 @@ export default function App() {
     return getEffectiveSlopeRun(breadth, overhang, roofType, polygonVertices);
   }, [breadth, overhang, roofType, polygonVertices]);
 
+  const handleRoofTypeChange = (nextType) => {
+    const cleanNext = String(nextType || 'hip').trim().toLowerCase();
+    if (cleanNext === roofType) return;
+
+    // Remember the current roof type's active angle before switching away
+    const currentDeg = Number(pitchMode === 'angle' ? pitchAngle : woodworkAngle);
+    if (Number.isFinite(currentDeg) && currentDeg >= 1 && currentDeg <= 68 && roofType !== 'flat') {
+      roofTypeAnglesRef.current[roofType] = Math.round(currentDeg * 10) / 10;
+    }
+
+    const targetAngle =
+      roofTypeAnglesRef.current[cleanNext] ?? ROOF_TYPE_DEFAULT_ANGLES[cleanNext] ?? 30;
+    const syncedRatio = Math.max(0.5, Math.min(24, Math.round(Math.tan((targetAngle * Math.PI) / 180) * 12 * 10) / 10));
+    const syncedKp =
+      cleanNext === 'flat'
+        ? 0
+        : Math.round(calculateRoofHeight('angle', targetAngle, breadth, cleanNext, overhang, polygonVertices) * 100) / 100;
+
+    setRoofType(cleanNext);
+    setKingpostOverrideM(null);
+    setSlantingHeightInput('');
+    setPitchMode('angle');
+    setPitchAngle(targetAngle);
+    setWoodworkAngle(targetAngle);
+    setPitchRatio(syncedRatio);
+    setHeightVal(syncedKp);
+  };
+
   const handleTweakKingpost = (newKpMeters) => {
     const kp = Math.round(Math.max(0.2, Math.min(8.5, Number(newKpMeters) || 0.2)) * 100) / 100;
     setKingpostOverrideM(kp);
@@ -851,6 +888,9 @@ export default function App() {
     const synced = calculateSlantingHeightFromKingpost(kp, breadth, overhang, roofType, polygonVertices);
     setWoodworkAngle(synced.pitchDegrees);
     setPitchAngle(synced.pitchDegrees);
+    if (roofType !== 'flat') {
+      roofTypeAnglesRef.current[roofType] = synced.pitchDegrees;
+    }
     if (buildingStage === 'woodwork' && hasSlantingHeight && slantingHeightInput !== '') {
       const dispH =
         unitSystem === UNIT_SYSTEMS.IMPERIAL
@@ -861,11 +901,15 @@ export default function App() {
   };
 
   const handleTweakPitchAngle = (newAngleDeg) => {
-    const deg = Math.round(Math.max(5, Math.min(68, Number(newAngleDeg) || 5)) * 10) / 10;
+    const minDeg = roofType === 'shed' || roofType === 'flat' ? 2 : 5;
+    const deg = Math.round(Math.max(minDeg, Math.min(68, Number(newAngleDeg) || minDeg)) * 10) / 10;
     setKingpostOverrideM(null);
     setPitchMode('angle');
     setPitchAngle(deg);
     setWoodworkAngle(deg);
+    if (roofType !== 'flat') {
+      roofTypeAnglesRef.current[roofType] = deg;
+    }
     const kp = Math.round(calculateRoofHeight('angle', deg, breadth, roofType, overhang, polygonVertices) * 100) / 100;
     setHeightVal(kp);
     if (buildingStage === 'woodwork' && hasSlantingHeight && slantingHeightInput !== '') {
@@ -888,6 +932,9 @@ export default function App() {
       setHeightVal(kp);
       setWoodworkAngle(check.pitchDegrees);
       setPitchAngle(check.pitchDegrees);
+      if (roofType !== 'flat') {
+        roofTypeAnglesRef.current[roofType] = check.pitchDegrees;
+      }
       if (buildingStage === 'woodwork' && hasSlantingHeight) {
         const dispH =
           unitSystem === UNIT_SYSTEMS.IMPERIAL
@@ -2211,7 +2258,7 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
                   key={t.id}
                   type="button"
                   className={`roof-type-card ${roofType === t.id ? 'active' : ''}`}
-                  onClick={() => setRoofType(t.id)}
+                  onClick={() => handleRoofTypeChange(t.id)}
                 >
                   <div className="roof-card-header">
                     <span className="roof-card-title">{t.name}</span>
@@ -2703,7 +2750,7 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
           woodworkConfig={woodworkConfig}
           setWoodworkConfig={setWoodworkConfig}
           roofType={roofType}
-          setRoofType={setRoofType}
+          setRoofType={handleRoofTypeChange}
           length={length}
           breadth={breadth}
           overhang={overhang}
@@ -3993,6 +4040,7 @@ Generated by Sijitek Solutions • RoofCalc Pro`;
         proEmail={proSession?.user?.email || ''}
         proAccessToken={proSession?.access_token || ''}
         proQuota={proQuota}
+        planExpiresAt={proPlanExpiresAt}
         initialError={proAuthError}
         isPasswordRecovery={isPasswordRecovery}
         onPasswordResetComplete={() => {

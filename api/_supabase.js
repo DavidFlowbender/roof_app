@@ -77,13 +77,13 @@ export async function getSupabaseProfile(supabaseUrl, serviceKey, { userId = nul
   if (!filter) return null;
 
   let resp = await fetch(
-    `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code,custom_prices,contractor_profile`,
+    `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,paystack_customer_code,ai_scans_used,ai_scans_limit,referred_by_code,custom_prices,contractor_profile`,
     { headers: getSupabaseAdminHeaders(serviceKey) }
   );
   if (!resp.ok) {
     // Graceful fallback if custom_prices / contractor_profile columns are not yet migrated
     resp = await fetch(
-      `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,ai_scans_used,ai_scans_limit,referred_by_code`,
+      `${supabaseUrl}/rest/v1/profiles?${filter}&select=id,email,is_pro,plan_expires_at,paystack_customer_code,ai_scans_used,ai_scans_limit,referred_by_code`,
       { headers: getSupabaseAdminHeaders(serviceKey) }
     );
   }
@@ -95,11 +95,36 @@ export async function getSupabaseProfile(supabaseUrl, serviceKey, { userId = nul
 export async function activateProForUser(
   supabaseUrl,
   serviceKey,
-  { userId = null, email = null, customerCode = null, referredByCode = null, days = 32 }
+  { userId = null, email = null, customerCode = null, referredByCode = null, days = 365, includedScans = 100 }
 ) {
-  const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   const existing = await getSupabaseProfile(supabaseUrl, serviceKey, { userId, email });
   const keepReferral = existing?.referred_by_code || referredByCode || null;
+
+  // Determine plan_expires_at:
+  // - `days === null` -> Founding Lifetime (never expires)
+  // - If user already has Lifetime (`is_pro && plan_expires_at === null`), preserve Lifetime
+  // - If user has an active timed pass, stack new days onto their remaining expiry so they never lose days
+  const alreadyLifetime = Boolean(existing?.is_pro && existing?.plan_expires_at === null);
+  let expires = null;
+  if (days !== null && days !== undefined && !alreadyLifetime) {
+    const existingMs = existing?.plan_expires_at ? new Date(existing.plan_expires_at).getTime() : 0;
+    const baseMs = existing?.is_pro && existingMs > Date.now() ? existingMs : Date.now();
+    expires = new Date(baseMs + Number(days) * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  // Determine AI scan credit limit:
+  // - Brand-new Pro buyer gets exact plan `includedScans` (30 / 100 / 200)
+  // - Returning/renewing/upgrading user keeps unused scans + adds new plan's `includedScans`
+  const planScans = Math.max(1, Math.round(Number(includedScans) || 100));
+  const hadPriorPro = Boolean(
+    existing?.is_pro ||
+      existing?.plan_expires_at ||
+      existing?.paystack_customer_code ||
+      (Number(existing?.ai_scans_used) || 0) > 0
+  );
+  const currentLimit = Number(existing?.ai_scans_limit) || 0;
+  const currentUsed = Number(existing?.ai_scans_used) || 0;
+  const nextScansLimit = hadPriorPro ? Math.max(currentLimit, currentUsed) + planScans : planScans;
 
   if (userId) {
     const resp = await fetch(`${supabaseUrl}/rest/v1/profiles?on_conflict=id`, {
@@ -110,6 +135,7 @@ export async function activateProForUser(
         ...(email ? { email: String(email).toLowerCase() } : {}),
         is_pro: true,
         plan_expires_at: expires,
+        ai_scans_limit: nextScansLimit,
         ...(customerCode ? { paystack_customer_code: customerCode } : {}),
         ...(keepReferral ? { referred_by_code: keepReferral } : {}),
       }),
@@ -126,6 +152,7 @@ export async function activateProForUser(
         body: JSON.stringify({
           is_pro: true,
           plan_expires_at: expires,
+          ai_scans_limit: nextScansLimit,
           ...(customerCode ? { paystack_customer_code: customerCode } : {}),
           ...(keepReferral ? { referred_by_code: keepReferral } : {}),
         }),

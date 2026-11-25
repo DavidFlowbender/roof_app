@@ -4,7 +4,9 @@ import {
   getSupabaseProfile,
 } from './_supabase.js';
 import {
-  getProBaseAmountKobo,
+  DEFAULT_PRO_PLAN_ID,
+  getProPlanById,
+  getDefaultProPlan,
   getCurrencyCode,
   getScanPackById,
   normalizeReferralCode,
@@ -65,10 +67,8 @@ export default async function handler(req, res) {
 
   const purchaseType = req.body?.purchaseType === 'scan_topup' ? 'scan_topup' : 'pro_upgrade';
   const currency = getCurrencyCode();
-  const planCode = (process.env.PAYSTACK_PLAN_CODE || '').trim();
 
-  let amount = getProBaseAmountKobo();
-  let usePlanCode = Boolean(planCode);
+  let amount = getDefaultProPlan().amountKobo;
   let metadata = {
     user_id: user.id,
     app: 'roofcalc_pro',
@@ -76,7 +76,6 @@ export default async function handler(req, res) {
   };
 
   if (purchaseType === 'scan_topup') {
-    usePlanCode = false;
     const profile = await getSupabaseProfile(supabaseUrl, supabaseServiceKey, {
       userId: user.id,
       email: user.email,
@@ -105,8 +104,23 @@ export default async function handler(req, res) {
       pack_label: pack.label,
     };
   } else {
-    const baseAmountKobo = getProBaseAmountKobo();
-    amount = baseAmountKobo;
+    const requestedPlanId = String(req.body?.planId || DEFAULT_PRO_PLAN_ID).trim().toLowerCase();
+    const selectedPlan = getProPlanById(requestedPlanId);
+    if (!selectedPlan) {
+      return res.status(400).json({
+        code: 'INVALID_PLAN',
+        error: 'Please select a valid RoofCalc Pro plan.',
+      });
+    }
+
+    amount = selectedPlan.amountKobo;
+    metadata = {
+      ...metadata,
+      plan_id: selectedPlan.id,
+      plan_name: selectedPlan.name,
+      plan_days: selectedPlan.days,
+      included_scans: selectedPlan.includedScans,
+    };
 
     const rawReferral = String(req.body?.referralCode || '').trim();
     if (rawReferral) {
@@ -120,6 +134,7 @@ export default async function handler(req, res) {
       const refCheck = await lookupReferralCode(supabaseUrl, supabaseServiceKey, cleanCode, {
         buyerEmail: user.email,
         strictActive: true,
+        planId: selectedPlan.id,
       });
       if (!refCheck.ok) {
         return res.status(400).json({
@@ -129,10 +144,6 @@ export default async function handler(req, res) {
       }
 
       amount = refCheck.finalAmountKobo;
-      // Do not attach a fixed Paystack subscription plan code when a custom referral discount is applied
-      if (refCheck.discountKobo > 0) {
-        usePlanCode = false;
-      }
       metadata = {
         ...metadata,
         referral_code: refCheck.code,
@@ -149,7 +160,6 @@ export default async function handler(req, res) {
     amount,
     currency,
     ...(callbackUrl ? { callback_url: callbackUrl } : {}),
-    ...(usePlanCode && planCode ? { plan: planCode } : {}),
     metadata,
   };
 

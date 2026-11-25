@@ -6,6 +6,53 @@ import {
 } from './_supabase.js';
 
 /**
+ * RoofCalc Pro Plans (Prepaid Passes + Founding Lifetime — works with Bank Transfer, OPay, USSD & Cards).
+ * Prices are stored in kobo (NGN * 100).
+ * `days: null` indicates a Lifetime plan (`plan_expires_at = null`).
+ */
+export const PRO_PLANS = [
+  {
+    id: 'pro_monthly',
+    name: '30-Day Pass',
+    shortLabel: '30 Days',
+    badge: 'Try Pro',
+    subtitle: 'Ideal for 1 project or testing Pro',
+    amountKobo: 500000, // ₦5,000
+    days: 30,
+    includedScans: 30,
+    periodLabel: '/ 30 days',
+    savingsText: '',
+  },
+  {
+    id: 'pro_annual',
+    name: 'Annual Pro',
+    shortLabel: '1 Year',
+    badge: 'Most Popular • Save 50%',
+    subtitle: '₦2,500/mo billed yearly',
+    amountKobo: 3000000, // ₦30,000
+    days: 365,
+    includedScans: 100,
+    periodLabel: '/ year',
+    savingsText: 'Save 50%',
+    popular: true,
+  },
+  {
+    id: 'pro_lifetime',
+    name: 'Founding Lifetime',
+    shortLabel: 'Lifetime',
+    badge: 'First 100 Buyers',
+    subtitle: 'Pay once, own Pro forever',
+    amountKobo: 7500000, // ₦75,000
+    days: null,
+    includedScans: 200,
+    periodLabel: 'one-time',
+    savingsText: 'Never expires',
+  },
+];
+
+export const DEFAULT_PRO_PLAN_ID = 'pro_annual';
+
+/**
  * Pay-as-you-go AI Scan Top-Up Packs (buy anytime at will; credits never expire).
  * Prices are stored in kobo (NGN * 100).
  */
@@ -14,31 +61,42 @@ export const SCAN_TOPUP_PACKS = [
     id: 'scans_50',
     label: '+50 AI Scans',
     scans: 50,
-    amountKobo: 300000, // ₦3,000 (₦60/scan)
+    amountKobo: 350000, // ₦3,500 (₦70/scan)
     badge: 'Quick Boost',
   },
   {
     id: 'scans_100',
     label: '+100 AI Scans',
     scans: 100,
-    amountKobo: 500000, // ₦5,000 (₦50/scan)
+    amountKobo: 600000, // ₦6,000 (₦60/scan)
     badge: 'Most Popular',
   },
   {
     id: 'scans_250',
     label: '+250 AI Scans',
     scans: 250,
-    amountKobo: 1000000, // ₦10,000 (₦40/scan)
+    amountKobo: 1200000, // ₦12,000 (₦48/scan)
     badge: 'Best Value',
   },
 ];
 
-export function getProBaseAmountKobo() {
-  return Math.max(10000, Number(process.env.PAYSTACK_PRO_AMOUNT_KOBO || 1000000));
+export function getProPlanById(planId) {
+  const id = String(planId || '').trim().toLowerCase();
+  return PRO_PLANS.find((p) => p.id === id) || null;
 }
 
-export function getProInitialScans() {
-  return Math.max(1, Number(process.env.PRO_INITIAL_AI_SCANS || process.env.PRO_MONTHLY_AI_SCANS || 100));
+export function getDefaultProPlan() {
+  return getProPlanById(DEFAULT_PRO_PLAN_ID) || PRO_PLANS[1] || PRO_PLANS[0];
+}
+
+export function getProBaseAmountKobo(planId = DEFAULT_PRO_PLAN_ID) {
+  const plan = getProPlanById(planId) || getDefaultProPlan();
+  return plan.amountKobo;
+}
+
+export function getProInitialScans(planId = DEFAULT_PRO_PLAN_ID) {
+  const plan = getProPlanById(planId) || getDefaultProPlan();
+  return plan.includedScans;
 }
 
 export function getCurrencyCode() {
@@ -96,7 +154,7 @@ export async function lookupReferralCode(
   supabaseUrl,
   serviceKey,
   rawCode,
-  { buyerEmail = '', strictActive = true } = {}
+  { buyerEmail = '', strictActive = true, planId = DEFAULT_PRO_PLAN_ID } = {}
 ) {
   const code = normalizeReferralCode(rawCode);
   if (!code) {
@@ -147,7 +205,7 @@ export async function lookupReferralCode(
     }
   }
 
-  const baseAmountKobo = getProBaseAmountKobo();
+  const baseAmountKobo = getProBaseAmountKobo(planId);
   const pricing = computeDiscountAndCommission(baseAmountKobo, row);
 
   return {
@@ -313,8 +371,9 @@ export async function fulfillVerifiedPaystackTransaction(
     };
   }
 
-  // Case 2: Pro Upgrade (Full price or Influencer Referral Discount)
-  const baseAmountKobo = getProBaseAmountKobo();
+  // Case 2: Pro Upgrade (30-Day Pass, Annual Pro, or Founding Lifetime — full price or Influencer Referral Discount)
+  const selectedPlan = getProPlanById(metadata.plan_id) || getDefaultProPlan();
+  const baseAmountKobo = selectedPlan.amountKobo;
   let expectedMinAmountKobo = baseAmountKobo;
   let discountKobo = 0;
   let appliedReferral = null;
@@ -324,6 +383,7 @@ export async function fulfillVerifiedPaystackTransaction(
     const refLookup = await lookupReferralCode(supabaseUrl, serviceKey, rawRefCode, {
       buyerEmail: email || '',
       strictActive: false,
+      planId: selectedPlan.id,
     });
     if (refLookup.ok) {
       // Prevent self-referral commission even on webhook replay
@@ -343,7 +403,7 @@ export async function fulfillVerifiedPaystackTransaction(
     return {
       ok: false,
       status: 400,
-      error: 'Transaction amount does not match the Pro plan price.',
+      error: `Transaction amount does not match the ${selectedPlan.name} price.`,
     };
   }
 
@@ -352,8 +412,8 @@ export async function fulfillVerifiedPaystackTransaction(
     user_id: userId,
     email,
     purchase_type: 'pro_upgrade',
-    pack_id: null,
-    scans_added: 0,
+    pack_id: selectedPlan.id,
+    scans_added: selectedPlan.includedScans,
     original_amount_kobo: baseAmountKobo,
     paid_amount_kobo: paidAmountKobo,
     discount_kobo: discountKobo,
@@ -370,6 +430,8 @@ export async function fulfillVerifiedPaystackTransaction(
       email,
       customerCode,
       referredByCode: appliedReferral?.code || null,
+      days: selectedPlan.days,
+      includedScans: selectedPlan.includedScans,
     });
     if (!activated) {
       return { ok: false, status: 500, error: 'Could not update Pro status.' };
@@ -405,16 +467,19 @@ export async function fulfillVerifiedPaystackTransaction(
   }
 
   const profile = await getSupabaseProfile(supabaseUrl, serviceKey, { userId, email });
-  const limit = Number(profile?.ai_scans_limit) || getProInitialScans();
+  const limit = Number(profile?.ai_scans_limit) || selectedPlan.includedScans;
   const used = Number(profile?.ai_scans_used) || 0;
 
   return {
     ok: true,
     alreadyProcessed: Boolean(claim.alreadyProcessed),
     purchaseType: 'pro_upgrade',
-    scansAdded: 0,
+    planId: selectedPlan.id,
+    planName: selectedPlan.name,
+    scansAdded: selectedPlan.includedScans,
     referralCode: appliedReferral?.code || null,
     isPro: true,
+    planExpiresAt: profile?.plan_expires_at ?? null,
     quota: { used, limit, remaining: Math.max(0, limit - used) },
   };
 }

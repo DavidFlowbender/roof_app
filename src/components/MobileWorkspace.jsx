@@ -23,6 +23,8 @@ import {
   LogOut,
   Plus,
   Trash2,
+  Check,
+  Pencil,
 } from 'lucide-react';
 import { MATERIAL_PROFILES, estimateMaterials, formatCurrency } from '../utils/materials';
 import { estimateWaterCollector } from '../utils/waterCollector';
@@ -105,6 +107,17 @@ export default function MobileWorkspace({
   const isPremium = externalIsPremium !== undefined ? externalIsPremium : localIsPremium;
   // Toggle inside Company Info & Prices page: 'company' | 'roof' | 'wc' | 'wood'
   const [priceCategory, setPriceCategory] = useState('company');
+  const [isEditingPrices, setIsEditingPrices] = useState(false);
+  const [priceSavedFlash, setPriceSavedFlash] = useState(false);
+
+  const handleSavePricesDone = () => {
+    if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setIsEditingPrices(false);
+    setPriceSavedFlash(true);
+    setTimeout(() => setPriceSavedFlash(false), 2500);
+  };
   // Sub-page toggles: Roof ('2d' | 'view' | 'quote'), WC & Woodwork ('view' | 'quote')
   const [roofSubPage, setRoofSubPage] = useState('2d');
   const [wcSubPage, setWcSubPage] = useState('view');
@@ -381,6 +394,7 @@ export default function MobileWorkspace({
               type="button"
               onClick={() => {
                 setPriceCategory(isRoofQuote ? 'roof' : 'wood');
+                setIsEditingPrices(true);
                 setActivePage('prices');
               }}
               style={{
@@ -754,26 +768,28 @@ export default function MobileWorkspace({
         {/* 1. COMPACT TOP BAR (48px) */}
         <header
           style={{
-            height: '50px',
+            height: '48px',
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '0 10px',
+            padding: '0 8px',
             background: '#111827',
             borderBottom: '1px solid #1f2937',
-            gap: '8px',
+            gap: '6px',
+            overflow: 'visible',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: '1 1 auto' }}>
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open pages sidebar"
               style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '9px',
+                width: '30px',
+                height: '30px',
+                flexShrink: 0,
+                borderRadius: '8px',
                 background: '#1e293b',
                 border: '1px solid #334155',
                 color: '#f8fafc',
@@ -793,49 +809,60 @@ export default function MobileWorkspace({
                 if (e.key === 'Enter' || e.key === ' ') setSidebarOpen(true);
               }}
               title="Open menu to switch views"
-              style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', minWidth: 0 }}
             >
               <span
                 style={{
-                  width: '24px',
-                  height: '24px',
+                  width: '22px',
+                  height: '22px',
                   borderRadius: '6px',
                   background: 'linear-gradient(135deg, #10b981, #0ea5e9)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 900,
-                  fontSize: '13px',
+                  fontSize: '12px',
                   color: '#fff',
                   flexShrink: 0,
                 }}
               >
                 S
               </span>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.01em' }}>RoofCalc</span>
-                <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>
-                {activePage === 'roof'
-                  ? roofSubPage === '2d'
-                    ? '• 2D Plan'
-                    : roofSubPage === 'view'
-                    ? '• Roof 3D'
-                    : '• Roof Quote'
-                  : activePage === 'wc'
-                  ? wcSubPage === 'view'
-                    ? '• WC 3D'
-                    : '• WC Quote'
-                  : activePage === 'wood'
-                  ? woodSubPage === 'view'
-                    ? '• Wood 3D'
-                    : '• Wood Quote'
-                  : '• Company & Prices'}
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.15 }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+                  RoofCalc
+                </span>
+                <span
+                  style={{
+                    fontSize: '9.5px',
+                    color: '#94a3b8',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {activePage === 'roof'
+                    ? roofSubPage === '2d'
+                      ? '2D Plan'
+                      : roofSubPage === 'view'
+                      ? 'Roof 3D'
+                      : 'Roof Quote'
+                    : activePage === 'wc'
+                    ? wcSubPage === 'view'
+                      ? 'WC 3D'
+                      : 'WC Quote'
+                    : activePage === 'wood'
+                    ? woodSubPage === 'view'
+                      ? 'Wood 3D'
+                      : 'Wood Quote'
+                    : 'Company & Prices'}
                 </span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
             {setVideoModalOpen && (
               <button
                 type="button"
@@ -843,19 +870,20 @@ export default function MobileWorkspace({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '3px',
                   background: '#1e293b',
                   color: '#38bdf8',
                   border: '1px solid #334155',
-                  borderRadius: '8px',
-                  padding: '6px 8px',
-                  fontSize: '11px',
+                  borderRadius: '7px',
+                  padding: '5px 7px',
+                  fontSize: '10.5px',
                   fontWeight: 700,
                   cursor: 'pointer',
+                  whiteSpace: 'nowrap',
                 }}
                 title="Watch Video Guide"
               >
-                <Video className="w-3.5 h-3.5" />
+                <Video className="w-3 h-3" />
                 <span>Guide</span>
               </button>
             )}
@@ -866,19 +894,20 @@ export default function MobileWorkspace({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                gap: '3px',
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                 color: '#0f172a',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '6px 9px',
-                fontSize: '11px',
+                borderRadius: '7px',
+                padding: '5px 8px',
+                fontSize: '10.5px',
                 fontWeight: 800,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
               title="Upload / Snap Paper Sketch"
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-3 h-3" />
               <span>Snap</span>
             </button>
 
@@ -890,8 +919,8 @@ export default function MobileWorkspace({
                 aria-label={proUser ? `Account (${getUserDisplayName(proUser)})` : 'Sign In / Profile'}
                 title={proUser ? `${getUserDisplayName(proUser)} (${proUser.email || ''})` : 'Tap to Sign In / Log Out'}
                 style={{
-                  width: '32px',
-                  height: '32px',
+                  width: '30px',
+                  height: '30px',
                   borderRadius: '50%',
                   background: proUser
                     ? 'linear-gradient(135deg, #0ea5e9, #10b981)'
@@ -902,7 +931,7 @@ export default function MobileWorkspace({
                       : '2px solid #38bdf8'
                     : '1.5px solid #475569',
                   color: proUser ? '#ffffff' : '#cbd5e1',
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 900,
                   letterSpacing: '0.02em',
                   display: 'inline-flex',
@@ -1524,7 +1553,7 @@ export default function MobileWorkspace({
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <button
                             type="button"
-                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(roofType === 'shed' || roofType === 'flat' ? 2 : 5, (geometry?.pitchDegrees || 30) - 1))}
                             style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
                             title="Decrease pitch angle"
                           >
@@ -1533,14 +1562,15 @@ export default function MobileWorkspace({
                           <input
                             className="compact-num-input"
                             type="number"
-                            min="5"
+                            min={roofType === 'shed' || roofType === 'flat' ? 2 : 5}
                             max="68"
                             step="1"
                             aria-label="Pitch angle (degrees)"
                             value={Number(geometry?.pitchDegrees ?? 0)}
                             onChange={(e) => {
                               const v = Number(e.target.value);
-                              if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                              const minDeg = roofType === 'shed' || roofType === 'flat' ? 2 : 5;
+                              if (Number.isFinite(v) && v >= minDeg && handleTweakPitchAngle) handleTweakPitchAngle(v);
                             }}
                             style={{ width: '40px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#fbbf24', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
@@ -1701,7 +1731,7 @@ export default function MobileWorkspace({
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
                           <button
                             type="button"
-                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(5, (geometry?.pitchDegrees || 30) - 1))}
+                            onClick={() => handleTweakPitchAngle && handleTweakPitchAngle(Math.max(roofType === 'shed' || roofType === 'flat' ? 2 : 5, (geometry?.pitchDegrees || 30) - 1))}
                             style={{ width: '24px', height: '24px', borderRadius: '6px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}
                             title="Decrease angle of inclination"
                           >
@@ -1710,14 +1740,15 @@ export default function MobileWorkspace({
                           <input
                             className="compact-num-input"
                             type="number"
-                            min="5"
+                            min={roofType === 'shed' || roofType === 'flat' ? 2 : 5}
                             max="68"
                             step="1"
                             aria-label="Woodwork angle of inclination (degrees)"
                             value={Number(geometry?.pitchDegrees ?? 0)}
                             onChange={(e) => {
                               const v = Number(e.target.value);
-                              if (Number.isFinite(v) && v >= 5 && handleTweakPitchAngle) handleTweakPitchAngle(v);
+                              const minDeg = roofType === 'shed' || roofType === 'flat' ? 2 : 5;
+                              if (Number.isFinite(v) && v >= minDeg && handleTweakPitchAngle) handleTweakPitchAngle(v);
                             }}
                             style={{ width: '40px', padding: '2px 2px', background: 'transparent', border: 'none', outline: 'none', color: '#38bdf8', fontSize: '12.5px', fontWeight: 800, textAlign: 'center' }}
                           />
@@ -2042,6 +2073,7 @@ export default function MobileWorkspace({
                           type="button"
                           onClick={() => {
                             setPriceCategory('wc');
+                            setIsEditingPrices(true);
                             setActivePage('prices');
                           }}
                           style={{
@@ -2362,33 +2394,64 @@ export default function MobileWorkspace({
                   <div
                     style={{
                       fontSize: '10.5px',
-                      color: priceSyncStatus === 'saved' ? '#34d399' : '#94a3b8',
+                      color: priceSavedFlash || priceSyncStatus === 'saved' ? '#34d399' : '#94a3b8',
                     }}
                   >
-                    {priceSyncStatus === 'saving'
+                    {priceSavedFlash
+                      ? '✓ Prices saved!'
+                      : priceSyncStatus === 'saving'
                       ? 'Saving to your Pro account...'
                       : priceSyncStatus === 'error'
                       ? 'Saved on device • Cloud sync pending'
                       : '✓ Saved permanently to your Pro account'}
                   </div>
                 </div>
-                {priceCategory !== 'company' && Object.keys(customPrices || {}).length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCustomPrices({})}
-                    style={{
-                      background: '#1e293b',
-                      color: '#38bdf8',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      padding: '5px 9px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Reset Prices
-                  </button>
+                {priceCategory !== 'company' && (
+                  isEditingPrices ? (
+                    <button
+                      type="button"
+                      onClick={handleSavePricesDone}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: '#10b981',
+                        color: '#052e16',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '6px 11px',
+                        fontSize: '11.5px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingPrices(true)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        background: '#1e293b',
+                        color: '#38bdf8',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        padding: '5px 10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                  )
                 )}
               </div>
 
@@ -2496,13 +2559,26 @@ export default function MobileWorkspace({
                       }}
                     >
                       <span>Labour / m²</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.laborPerM2 !== undefined ? customPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
-                        onChange={(e) => setCustomPrices({ ...(customPrices || {}), laborPerM2: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
-                      />
+                      {isEditingPrices ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={customPrices?.laborPerM2 !== undefined ? customPrices.laborPerM2 : (currencyCode === 'NGN' ? 1500 : 3.5)}
+                          onChange={(e) => setCustomPrices({ ...(customPrices || {}), laborPerM2: e.target.value })}
+                          style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
+                        />
+                      ) : (
+                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 800, paddingTop: '2px' }}>
+                          {formatCurrency(
+                            customPrices?.laborPerM2 !== undefined && customPrices.laborPerM2 !== ''
+                              ? Number(customPrices.laborPerM2)
+                              : currencyCode === 'NGN'
+                              ? 1500
+                              : 3.5,
+                            currencyCode
+                          )}
+                        </div>
+                      )}
                     </label>
                     <label
                       style={{
@@ -2518,13 +2594,26 @@ export default function MobileWorkspace({
                       }}
                     >
                       <span>Transport</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.transport !== undefined ? customPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
-                        onChange={(e) => setCustomPrices({ ...(customPrices || {}), transport: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
-                      />
+                      {isEditingPrices ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={customPrices?.transport !== undefined ? customPrices.transport : (currencyCode === 'NGN' ? 25000 : 50)}
+                          onChange={(e) => setCustomPrices({ ...(customPrices || {}), transport: e.target.value })}
+                          style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700, width: '100%' }}
+                        />
+                      ) : (
+                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 800, paddingTop: '2px' }}>
+                          {formatCurrency(
+                            customPrices?.transport !== undefined && customPrices.transport !== ''
+                              ? Number(customPrices.transport)
+                              : currencyCode === 'NGN'
+                              ? 25000
+                              : 50,
+                            currencyCode
+                          )}
+                        </div>
+                      )}
                     </label>
                     {setWastePercentage && (
                       <label
@@ -2541,19 +2630,25 @@ export default function MobileWorkspace({
                         }}
                       >
                         <span>Waste %</span>
-                        <input
-                          className="compact-num-input"
-                          type="number"
-                          min="0"
-                          max="30"
-                          step="1"
-                          value={Number(wastePercentage) || 0}
-                          onChange={(e) => {
-                            const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
-                            setWastePercentage(v);
-                          }}
-                          style={{ background: '#090e1a', color: '#34d399', border: '1px solid #334155', borderRadius: '6px', padding: '5px 4px', fontSize: '13px', fontWeight: 800, textAlign: 'center', width: '100%' }}
-                        />
+                        {isEditingPrices ? (
+                          <input
+                            className="compact-num-input"
+                            type="number"
+                            min="0"
+                            max="30"
+                            step="1"
+                            value={Number(wastePercentage) || 0}
+                            onChange={(e) => {
+                              const v = Math.max(0, Math.min(30, Math.round(Number(e.target.value) || 0)));
+                              setWastePercentage(v);
+                            }}
+                            style={{ background: '#090e1a', color: '#34d399', border: '1px solid #334155', borderRadius: '6px', padding: '5px 4px', fontSize: '13px', fontWeight: 800, textAlign: 'center', width: '100%' }}
+                          />
+                        ) : (
+                          <div style={{ color: '#34d399', fontSize: '13px', fontWeight: 800, paddingTop: '2px', textAlign: 'center' }}>
+                            {Number(wastePercentage) || 0}%
+                          </div>
+                        )}
                       </label>
                     )}
                   </div>
@@ -2575,13 +2670,26 @@ export default function MobileWorkspace({
                       }}
                     >
                       <span>WC Labour / m</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.wc_labor !== undefined ? customPrices.wc_labor : (currencyCode === 'NGN' ? 2000 : 4.0)}
-                        onChange={(e) => setCustomPrices({ ...(customPrices || {}), wc_labor: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
-                      />
+                      {isEditingPrices ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={customPrices?.wc_labor !== undefined ? customPrices.wc_labor : (currencyCode === 'NGN' ? 2000 : 4.0)}
+                          onChange={(e) => setCustomPrices({ ...(customPrices || {}), wc_labor: e.target.value })}
+                          style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
+                        />
+                      ) : (
+                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 800, paddingTop: '2px' }}>
+                          {formatCurrency(
+                            customPrices?.wc_labor !== undefined && customPrices.wc_labor !== ''
+                              ? Number(customPrices.wc_labor)
+                              : currencyCode === 'NGN'
+                              ? 2000
+                              : 4.0,
+                            currencyCode
+                          )}
+                        </div>
+                      )}
                     </label>
                     <label
                       style={{
@@ -2597,13 +2705,26 @@ export default function MobileWorkspace({
                       }}
                     >
                       <span>WC Transport</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.wc_transport !== undefined ? customPrices.wc_transport : (currencyCode === 'NGN' ? 15000 : 30)}
-                        onChange={(e) => setCustomPrices({ ...(customPrices || {}), wc_transport: e.target.value })}
-                        style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
-                      />
+                      {isEditingPrices ? (
+                        <input
+                          type="number"
+                          min="0"
+                          value={customPrices?.wc_transport !== undefined ? customPrices.wc_transport : (currencyCode === 'NGN' ? 15000 : 30)}
+                          onChange={(e) => setCustomPrices({ ...(customPrices || {}), wc_transport: e.target.value })}
+                          style={{ background: '#090e1a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '6px', padding: '5px 8px', fontSize: '13px', fontWeight: 700 }}
+                        />
+                      ) : (
+                        <div style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 800, paddingTop: '2px' }}>
+                          {formatCurrency(
+                            customPrices?.wc_transport !== undefined && customPrices.wc_transport !== ''
+                              ? Number(customPrices.wc_transport)
+                              : currencyCode === 'NGN'
+                              ? 15000
+                              : 30,
+                            currencyCode
+                          )}
+                        </div>
+                      )}
                     </label>
                   </div>
                 )}
@@ -2627,55 +2748,75 @@ export default function MobileWorkspace({
                         background: '#111827',
                         border: '1px solid #1f2937',
                         borderRadius: '9px',
-                        padding: '7px 10px',
+                        padding: isEditingPrices ? '7px 10px' : '9px 11px',
                         fontSize: '12px',
                       }}
                     >
-                      <input
-                        type="text"
-                        aria-label={`Rename ${it.defaultName || it.name}`}
-                        placeholder={it.defaultName || it.name}
-                        value={
-                          customPrices?.__customNames?.[it.id] !== undefined
-                            ? customPrices.__customNames[it.id]
-                            : it.name
-                        }
-                        onChange={(e) => {
-                          const nextNames = {
-                            ...(customPrices?.__customNames || {}),
-                            [it.id]: e.target.value,
-                          };
-                          setCustomPrices({ ...(customPrices || {}), __customNames: nextNames });
-                        }}
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          background: '#090e1a',
-                          color: '#e2e8f0',
-                          border: '1px solid #263244',
-                          borderRadius: '6px',
-                          padding: '5px 8px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                        }}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.[it.id] !== undefined ? customPrices[it.id] : it.unitPrice}
-                        onChange={(e) => setCustomPrices({ ...(customPrices || {}), [it.id]: e.target.value })}
-                        style={{
-                          width: '92px',
-                          background: '#090e1a',
-                          color: '#f8fafc',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '5px 8px',
-                          fontSize: '12.5px',
-                          fontWeight: 700,
-                          textAlign: 'right',
-                        }}
-                      />
+                      {isEditingPrices ? (
+                        <>
+                          <input
+                            type="text"
+                            aria-label={`Rename ${it.defaultName || it.name}`}
+                            placeholder={it.defaultName || it.name}
+                            value={
+                              customPrices?.__customNames?.[it.id] !== undefined
+                                ? customPrices.__customNames[it.id]
+                                : it.name
+                            }
+                            onChange={(e) => {
+                              const nextNames = {
+                                ...(customPrices?.__customNames || {}),
+                                [it.id]: e.target.value,
+                              };
+                              setCustomPrices({ ...(customPrices || {}), __customNames: nextNames });
+                            }}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              background: '#090e1a',
+                              color: '#e2e8f0',
+                              border: '1px solid #263244',
+                              borderRadius: '6px',
+                              padding: '5px 8px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                            }}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={customPrices?.[it.id] !== undefined ? customPrices[it.id] : it.unitPrice}
+                            onChange={(e) => setCustomPrices({ ...(customPrices || {}), [it.id]: e.target.value })}
+                            style={{
+                              width: '92px',
+                              background: '#090e1a',
+                              color: '#f8fafc',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '5px 8px',
+                              fontSize: '12.5px',
+                              fontWeight: 700,
+                              textAlign: 'right',
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ flex: 1, minWidth: 0, color: '#e2e8f0', fontWeight: 600 }}>
+                            {customPrices?.__customNames?.[it.id] !== undefined && customPrices.__customNames[it.id] !== ''
+                              ? customPrices.__customNames[it.id]
+                              : it.name}
+                          </span>
+                          <span style={{ color: '#f8fafc', fontSize: '12.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                            {formatCurrency(
+                              customPrices?.[it.id] !== undefined && customPrices[it.id] !== ''
+                                ? Number(customPrices[it.id])
+                                : it.unitPrice,
+                              currencyCode
+                            )}
+                          </span>
+                        </>
+                      )}
                     </div>
                   ))}
 
@@ -2693,104 +2834,126 @@ export default function MobileWorkspace({
                       padding: '8px 10px',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <input
-                        type="text"
-                        value={ci.name}
-                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { name: e.target.value })}
-                        placeholder="Material name"
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          background: '#090e1a',
-                          color: '#f8fafc',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '5px 8px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCustomMaterial(ci.id)}
-                        title="Remove custom material"
-                        style={{
-                          background: 'rgba(239, 68, 68, 0.16)',
-                          color: '#fca5a5',
-                          border: '1px solid rgba(239, 68, 68, 0.35)',
-                          borderRadius: '6px',
-                          padding: '5px 7px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '64px 72px 1fr', gap: '6px', alignItems: 'center' }}>
-                      <input
-                        className="compact-num-input"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={ci.quantity}
-                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { quantity: Number(e.target.value) || 0 })}
-                        placeholder="Qty"
-                        aria-label="Custom material quantity"
-                        style={{
-                          background: '#090e1a',
-                          color: '#38bdf8',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '5px 6px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          textAlign: 'center',
-                        }}
-                      />
-                      <input
-                        type="text"
-                        value={ci.unit}
-                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { unit: e.target.value })}
-                        placeholder="pcs"
-                        aria-label="Custom material unit"
-                        style={{
-                          background: '#090e1a',
-                          color: '#cbd5e1',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '5px 6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          textAlign: 'center',
-                        }}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        value={customPrices?.[ci.id] !== undefined ? customPrices[ci.id] : ci.unitPrice}
-                        onChange={(e) => handleUpdateCustomMaterial(ci.id, { unitPrice: Number(e.target.value) || 0 })}
-                        placeholder="Unit price"
-                        aria-label="Custom material unit price"
-                        style={{
-                          background: '#090e1a',
-                          color: '#34d399',
-                          border: '1px solid #334155',
-                          borderRadius: '6px',
-                          padding: '5px 8px',
-                          fontSize: '12.5px',
-                          fontWeight: 700,
-                          textAlign: 'right',
-                        }}
-                      />
-                    </div>
+                    {isEditingPrices ? (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <input
+                            type="text"
+                            value={ci.name}
+                            onChange={(e) => handleUpdateCustomMaterial(ci.id, { name: e.target.value })}
+                            placeholder="Material name"
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              background: '#090e1a',
+                              color: '#f8fafc',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '5px 8px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomMaterial(ci.id)}
+                            title="Remove custom material"
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.16)',
+                              color: '#fca5a5',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              borderRadius: '6px',
+                              padding: '5px 7px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '64px 72px 1fr', gap: '6px', alignItems: 'center' }}>
+                          <input
+                            className="compact-num-input"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={ci.quantity}
+                            onChange={(e) => handleUpdateCustomMaterial(ci.id, { quantity: Number(e.target.value) || 0 })}
+                            placeholder="Qty"
+                            aria-label="Custom material quantity"
+                            style={{
+                              background: '#090e1a',
+                              color: '#38bdf8',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '5px 6px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              textAlign: 'center',
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={ci.unit}
+                            onChange={(e) => handleUpdateCustomMaterial(ci.id, { unit: e.target.value })}
+                            placeholder="pcs"
+                            aria-label="Custom material unit"
+                            style={{
+                              background: '#090e1a',
+                              color: '#cbd5e1',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '5px 6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              textAlign: 'center',
+                            }}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={customPrices?.[ci.id] !== undefined ? customPrices[ci.id] : ci.unitPrice}
+                            onChange={(e) => handleUpdateCustomMaterial(ci.id, { unitPrice: Number(e.target.value) || 0 })}
+                            placeholder="Unit price"
+                            aria-label="Custom material unit price"
+                            style={{
+                              background: '#090e1a',
+                              color: '#34d399',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '5px 8px',
+                              fontSize: '12.5px',
+                              fontWeight: 700,
+                              textAlign: 'right',
+                            }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#f8fafc', fontWeight: 700 }}>{ci.name}</div>
+                          <div style={{ color: '#7dd3fc', fontSize: '10.5px' }}>
+                            {ci.quantity} {ci.unit} • Custom item
+                          </div>
+                        </div>
+                        <span style={{ color: '#34d399', fontSize: '12.5px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          {formatCurrency(
+                            customPrices?.[ci.id] !== undefined && customPrices[ci.id] !== ''
+                              ? Number(customPrices[ci.id])
+                              : ci.unitPrice,
+                            currencyCode
+                          )}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
 
-                {/* Add New Material & Price Row Form */}
+                {/* Add New Material & Price Row Form (Edit mode only) */}
+                {isEditingPrices && (
                 <form
                   onSubmit={handleAddCustomMaterial}
                   style={{
@@ -2891,38 +3054,64 @@ export default function MobileWorkspace({
                     </button>
                   </div>
                 </form>
+                )}
                 </>
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (priceCategory === 'wood') {
-                    setWoodSubPage('quote');
-                    setActivePage('wood');
-                  } else if (priceCategory === 'wc') {
-                    setWcSubPage('quote');
-                    setActivePage('wc');
-                  } else {
-                    setRoofSubPage('quote');
-                    setActivePage('roof');
-                  }
-                }}
-                style={{
-                  flexShrink: 0,
-                  background: '#0ea5e9',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '10px',
-                  fontSize: '12.5px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                }}
-              >
-                Done — View Quotation
-              </button>
+              {priceCategory !== 'company' && isEditingPrices ? (
+                <button
+                  type="button"
+                  onClick={handleSavePricesDone}
+                  style={{
+                    flexShrink: 0,
+                    background: '#10b981',
+                    color: '#052e16',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Prices</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (priceCategory === 'wood') {
+                      setWoodSubPage('quote');
+                      setActivePage('wood');
+                    } else if (priceCategory === 'wc') {
+                      setWcSubPage('quote');
+                      setActivePage('wc');
+                    } else {
+                      setRoofSubPage('quote');
+                      setActivePage('roof');
+                    }
+                  }}
+                  style={{
+                    flexShrink: 0,
+                    background: '#0ea5e9',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    padding: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Done — View Quotation
+                </button>
+              )}
               </>
               )}
             </div>
@@ -3112,21 +3301,6 @@ export default function MobileWorkspace({
                   >
                     <Video className="w-4 h-4" />
                     <span>Watch Guide Video</span>
-                  </button>
-                )}
-
-                {isCustomShape && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPolygonVertices(null);
-                      setSketchUnderlayImage(null);
-                      setSidebarOpen(false);
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', background: '#1e293b', color: '#f8fafc', border: '1px solid #334155', borderRadius: '9px', padding: '8px', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reset to Rectangle</span>
                   </button>
                 )}
               </div>

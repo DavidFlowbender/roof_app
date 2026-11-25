@@ -8,11 +8,16 @@
 import { buildRoofSkeleton } from './roofSkeleton.js';
 
 export const ROOF_TYPES = [
-  { id: 'hip', name: 'Hip Roof', desc: 'Slopes down on all four sides with hips and ridge' },
-  { id: 'gable', name: 'Gable Roof', desc: 'Classic two-pitch slope with triangular end walls' },
-  { id: 'shed', name: 'Shed / Mono-Pitch', desc: 'Single sloping plane, ideal for modern homes & extensions' },
-  { id: 'flat', name: 'Flat Roof', desc: 'Modern low-slope flat roof deck (concealed or slab finish)' },
+  { id: 'hip', name: 'Hip Roof', desc: 'Slopes down on all four sides with hips and ridge', defaultPitchDegrees: 45 },
+  { id: 'gable', name: 'Gable Roof', desc: 'Classic two-pitch slope with triangular end walls', defaultPitchDegrees: 35 },
+  { id: 'shed', name: 'Shed / Mono-Pitch', desc: 'Single sloping plane — modern mono-pitch (10°–20°) down to flat/concealed roof fall (2°–5°)', defaultPitchDegrees: 14 },
 ];
+
+export const ROOF_TYPE_DEFAULT_ANGLES = {
+  hip: 45,
+  gable: 35,
+  shed: 14,
+};
 
 export const PITCH_PRESETS = [
   { label: 'Low Pitch (3:12 / 14°)', ratio: '3:12', degrees: 14.04, risePerRun: 3 / 12 },

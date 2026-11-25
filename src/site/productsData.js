@@ -28,7 +28,7 @@ export function getSijitekProducts() {
         },
         {
           label: 'Live 3D Verification',
-          detail: 'Inspect Hip, Gable, Shed / Mono-Pitch, and Flat roofs alongside timber framing and rainwater drops.',
+          detail: 'Inspect Hip, Gable, and Shed / Mono-Pitch (including low-slope concealed/flat) roofs alongside timber framing and rainwater drops.',
         },
         {
           label: 'Itemized Schedules (BOQ)',
@@ -102,7 +102,7 @@ export const AUDIENCE_GROUPS = [
     index: '04',
     role: 'Architects & Site Engineers',
     title: 'Check geometry before timber goes up.',
-    body: 'Verify kingpost heights, pitch angles, valley lengths, and multi-wing intersections across Hip, Gable, Shed / Mono-Pitch, and Flat roof layouts.',
+    body: 'Verify kingpost heights, pitch angles, valley lengths, and multi-wing intersections across Hip, Gable, and Shed / Mono-Pitch roof layouts.',
   },
 ];
 

@@ -30,6 +30,8 @@ import {
   saveStoredReferralCode,
   fetchPricingAndReferral,
   formatKoboAsCurrency,
+  DEFAULT_PRO_PLANS,
+  DEFAULT_PRO_PLAN_ID,
   DEFAULT_SCAN_TOPUP_PACKS,
 } from '../utils/proSession';
 
@@ -70,6 +72,7 @@ export default function ProUpgradeModal({
   proEmail = '',
   proAccessToken = '',
   proQuota = null,
+  planExpiresAt = null,
   initialError = '',
   isPasswordRecovery = false,
   onPasswordResetComplete,
@@ -94,24 +97,21 @@ export default function ProUpgradeModal({
   const googleBtnHostRef = useRef(null);
   const directGoogleSupported = isDirectGoogleSignInSupported();
 
-  // Live Pro pricing + Scan Top-Up Packs + Referral Discount state
+  // Live Pro Plans (30-Day Pass, Annual Pro, Founding Lifetime) + Scan Top-Up Packs + Referral Discount
+  const [selectedPlanId, setSelectedPlanId] = useState(DEFAULT_PRO_PLAN_ID);
   const [pricingInfo, setPricingInfo] = useState({
-    baseAmountKobo: 1000000,
-    finalAmountKobo: 1000000,
-    discountPercent: 0,
-    discountKobo: 0,
     currency: 'NGN',
-    includedScans: 100,
+    plans: DEFAULT_PRO_PLANS,
     scanPacks: DEFAULT_SCAN_TOPUP_PACKS,
   });
   const [referralInput, setReferralInput] = useState(() => getStoredReferralCode());
-  const [appliedReferral, setAppliedReferral] = useState(null); // { code, influencerName, discountPercent, discountKobo, finalAmountKobo }
+  const [appliedReferral, setAppliedReferral] = useState(null); // { code, influencerName, discountPercent }
   const [referralBusy, setReferralBusy] = useState(false);
   const [referralError, setReferralError] = useState('');
 
   const supabaseEnabled = isSupabaseConfigured();
 
-  // Fetch live server pricing + auto-validate any saved ?ref=CODE whenever modal opens
+  // Fetch live server plans & packs + auto-validate any saved ?ref=CODE whenever modal opens
   useEffect(() => {
     if (!isOpen || !supabaseEnabled) return;
     let cancelled = false;
@@ -124,16 +124,13 @@ export default function ProUpgradeModal({
       try {
         const data = await fetchPricingAndReferral({
           code: isPremium ? '' : savedCode,
+          planId: selectedPlanId,
           accessToken: proAccessToken,
         });
         if (cancelled) return;
         setPricingInfo({
-          baseAmountKobo: data.baseAmountKobo || 1000000,
-          finalAmountKobo: data.valid ? data.finalAmountKobo : data.baseAmountKobo || 1000000,
-          discountPercent: data.valid ? data.discountPercent : 0,
-          discountKobo: data.valid ? data.discountKobo : 0,
           currency: data.currency || 'NGN',
-          includedScans: data.includedScans || 100,
+          plans: Array.isArray(data.plans) && data.plans.length > 0 ? data.plans : DEFAULT_PRO_PLANS,
           scanPacks: Array.isArray(data.scanPacks) && data.scanPacks.length > 0 ? data.scanPacks : DEFAULT_SCAN_TOPUP_PACKS,
         });
         if (!isPremium && savedCode) {
@@ -142,8 +139,6 @@ export default function ProUpgradeModal({
               code: data.code,
               influencerName: data.influencerName || '',
               discountPercent: data.discountPercent || 0,
-              discountKobo: data.discountKobo || 0,
-              finalAmountKobo: data.finalAmountKobo,
             });
             setReferralError('');
           } else {
@@ -240,12 +235,6 @@ export default function ProUpgradeModal({
     if (!cleaned) {
       saveStoredReferralCode('');
       setAppliedReferral(null);
-      setPricingInfo((prev) => ({
-        ...prev,
-        finalAmountKobo: prev.baseAmountKobo,
-        discountPercent: 0,
-        discountKobo: 0,
-      }));
       return;
     }
 
@@ -253,6 +242,7 @@ export default function ProUpgradeModal({
     try {
       const data = await fetchPricingAndReferral({
         code: cleaned,
+        planId: selectedPlanId,
         accessToken: proAccessToken,
       });
       if (data.valid) {
@@ -262,26 +252,16 @@ export default function ProUpgradeModal({
           code: data.code,
           influencerName: data.influencerName || '',
           discountPercent: data.discountPercent || 0,
-          discountKobo: data.discountKobo || 0,
-          finalAmountKobo: data.finalAmountKobo,
         });
         setPricingInfo((prev) => ({
           ...prev,
-          baseAmountKobo: data.baseAmountKobo || prev.baseAmountKobo,
-          finalAmountKobo: data.finalAmountKobo,
-          discountPercent: data.discountPercent || 0,
-          discountKobo: data.discountKobo || 0,
           currency: data.currency || prev.currency,
+          plans: Array.isArray(data.plans) && data.plans.length > 0 ? data.plans : prev.plans,
+          scanPacks: Array.isArray(data.scanPacks) && data.scanPacks.length > 0 ? data.scanPacks : prev.scanPacks,
         }));
         setReferralError('');
       } else {
         setAppliedReferral(null);
-        setPricingInfo((prev) => ({
-          ...prev,
-          finalAmountKobo: prev.baseAmountKobo,
-          discountPercent: 0,
-          discountKobo: 0,
-        }));
         setReferralError(data.error || 'Referral code is invalid or inactive.');
       }
     } catch (err) {
@@ -296,12 +276,6 @@ export default function ProUpgradeModal({
     setReferralInput('');
     setAppliedReferral(null);
     setReferralError('');
-    setPricingInfo((prev) => ({
-      ...prev,
-      finalAmountKobo: prev.baseAmountKobo,
-      discountPercent: 0,
-      discountKobo: 0,
-    }));
   };
 
   const handleSyncFromLaptop = async () => {
@@ -356,6 +330,7 @@ export default function ProUpgradeModal({
     try {
       const checkoutUrl = await startPaystackCheckout(proAccessToken, {
         purchaseType: 'pro_upgrade',
+        planId: selectedPlan.id,
         referralCode: appliedReferral?.code || '',
         fallbackEmail: proEmail || email,
       });
@@ -460,13 +435,26 @@ export default function ProUpgradeModal({
 
   const isAdminAccount = isAdminEmail(proEmail);
   const currency = pricingInfo.currency || 'NGN';
-  const hasDiscount = Boolean(appliedReferral && pricingInfo.discountKobo > 0);
-  const displayFinalPrice = formatKoboAsCurrency(
-    hasDiscount ? pricingInfo.finalAmountKobo : pricingInfo.baseAmountKobo,
-    currency
-  );
-  const displayBasePrice = formatKoboAsCurrency(pricingInfo.baseAmountKobo, currency);
+  const availablePlans = pricingInfo.plans?.length ? pricingInfo.plans : DEFAULT_PRO_PLANS;
+  const selectedPlan =
+    availablePlans.find((p) => p.id === selectedPlanId) ||
+    availablePlans.find((p) => p.id === DEFAULT_PRO_PLAN_ID) ||
+    availablePlans[0];
+  const discountPercent = appliedReferral ? Math.min(90, Math.max(0, Number(appliedReferral.discountPercent) || 0)) : 0;
+  const computedDiscountKobo = discountPercent > 0 ? Math.round((selectedPlan.amountKobo * discountPercent) / 100) : 0;
+  const computedFinalKobo = Math.max(10000, selectedPlan.amountKobo - computedDiscountKobo);
+  const actualDiscountKobo = Math.max(0, selectedPlan.amountKobo - computedFinalKobo);
+  const hasDiscount = Boolean(appliedReferral && actualDiscountKobo > 0);
+  const displayFinalPrice = formatKoboAsCurrency(hasDiscount ? computedFinalKobo : selectedPlan.amountKobo, currency);
+  const displayBasePrice = formatKoboAsCurrency(selectedPlan.amountKobo, currency);
   const isCheckoutBusy = Boolean(checkoutBusyId);
+  const formattedPlanExpiry = (() => {
+    if (!isPremium || isAdminAccount) return '';
+    if (!planExpiresAt) return 'LIFETIME PRO';
+    const d = new Date(planExpiresAt);
+    if (Number.isNaN(d.getTime())) return 'PRO ACTIVE';
+    return `PRO • ENDS ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}`;
+  })();
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -510,7 +498,7 @@ export default function ProUpgradeModal({
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
             <Sparkles size={15} style={{ color: '#fbbf24', flexShrink: 0, marginTop: '2px' }} />
             <span>
-              <strong>AI Sketch Auto-Dimension:</strong> Includes {pricingInfo.includedScans} AI scan credits; buy extra scans anytime at will (credits never expire).
+              <strong>AI Sketch Auto-Dimension:</strong> Includes {selectedPlan.includedScans} AI scan credits on {selectedPlan.name}; buy extra scans anytime at will (credits never expire).
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.82rem', color: '#fef3c7' }}>
@@ -633,7 +621,7 @@ export default function ProUpgradeModal({
                       color: isAdminAccount ? '#34d399' : isPremium ? '#34d399' : '#cbd5e1',
                     }}
                   >
-                    {isAdminAccount ? 'ADMIN • ALL ACCESS' : isPremium ? 'PRO ACTIVE' : 'FREE PLAN'}
+                    {isAdminAccount ? 'ADMIN • ALL ACCESS' : isPremium ? (formattedPlanExpiry || 'PRO ACTIVE') : 'FREE PLAN'}
                   </span>
                 </div>
 
@@ -786,12 +774,95 @@ export default function ProUpgradeModal({
                     )}
                   </div>
                 ) : (
-                  /* Free Plan: Pro Pricing + Influencer Referral Code Discount + Upgrade Checkout */
+                  /* Free Plan: 3-Tier Prepaid Ladder (30-Day, Annual, Founding Lifetime) + Referral Discount */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-                    {/* Price Banner */}
+                    {/* 3-Tier Plan Selector */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.45rem' }}>
+                      {availablePlans.map((plan) => {
+                        const isSelected = plan.id === selectedPlan.id;
+                        const planDiscKobo =
+                          discountPercent > 0 ? Math.round((plan.amountKobo * discountPercent) / 100) : 0;
+                        const planFinalKobo = Math.max(10000, plan.amountKobo - planDiscKobo);
+                        const isPopular = Boolean(plan.popular);
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            disabled={isCheckoutBusy}
+                            onClick={() => setSelectedPlanId(plan.id)}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '0.26rem',
+                              padding: '0.62rem 0.35rem',
+                              borderRadius: '10px',
+                              border: `1.5px solid ${
+                                isSelected
+                                  ? '#10b981'
+                                  : isPopular
+                                    ? 'rgba(245, 158, 11, 0.5)'
+                                    : 'var(--border-color)'
+                              }`,
+                              background: isSelected
+                                ? 'rgba(16, 185, 129, 0.14)'
+                                : isPopular
+                                  ? 'rgba(245, 158, 11, 0.08)'
+                                  : 'rgba(2, 6, 23, 0.5)',
+                              color: 'var(--text-primary)',
+                              cursor: isCheckoutBusy ? 'wait' : 'pointer',
+                              textAlign: 'center',
+                              transition: 'border-color 0.15s ease, background 0.15s ease',
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: '0.6rem',
+                                fontWeight: 800,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.03em',
+                                padding: '0.12rem 0.38rem',
+                                borderRadius: '999px',
+                                background: isSelected
+                                  ? 'rgba(16, 185, 129, 0.24)'
+                                  : isPopular
+                                    ? 'rgba(245, 158, 11, 0.2)'
+                                    : 'rgba(56, 189, 248, 0.14)',
+                                color: isSelected ? '#6ee7b7' : isPopular ? '#fbbf24' : '#7dd3fc',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {plan.badge}
+                            </span>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.15 }}>
+                              {plan.name}
+                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.05rem' }}>
+                              {hasDiscount && (
+                                <span style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
+                                  {formatKoboAsCurrency(plan.amountKobo, currency)}
+                                </span>
+                              )}
+                              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: isSelected ? '#34d399' : '#f8fafc' }}>
+                                {formatKoboAsCurrency(hasDiscount ? planFinalKobo : plan.amountKobo, currency)}
+                              </span>
+                              <span style={{ fontSize: '0.64rem', color: 'var(--text-muted)' }}>
+                                {plan.periodLabel}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#38bdf8' }}>
+                              +{plan.includedScans} AI scans
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected Plan Summary Banner */}
                     <div
                       style={{
-                        padding: '0.7rem 0.8rem',
+                        padding: '0.68rem 0.8rem',
                         borderRadius: '9px',
                         background: hasDiscount ? 'rgba(16, 185, 129, 0.1)' : 'rgba(2, 6, 23, 0.45)',
                         border: `1px solid ${hasDiscount ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-color)'}`,
@@ -804,16 +875,19 @@ export default function ProUpgradeModal({
                     >
                       <div>
                         <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          RoofCalc Pro (includes {pricingInfo.includedScans} AI scans)
+                          <strong>{selectedPlan.name}</strong> • {selectedPlan.subtitle} • {selectedPlan.includedScans} AI scans
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', marginTop: '0.1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.45rem', marginTop: '0.12rem' }}>
                           {hasDiscount && (
                             <span style={{ fontSize: '0.84rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>
                               {displayBasePrice}
                             </span>
                           )}
-                          <span style={{ fontSize: '1.18rem', fontWeight: 800, color: hasDiscount ? '#34d399' : '#f8fafc' }}>
+                          <span style={{ fontSize: '1.16rem', fontWeight: 800, color: hasDiscount ? '#34d399' : '#f8fafc' }}>
                             {displayFinalPrice}
+                          </span>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            {selectedPlan.periodLabel}
                           </span>
                         </div>
                       </div>
@@ -828,7 +902,7 @@ export default function ProUpgradeModal({
                             color: '#34d399',
                           }}
                         >
-                          {appliedReferral.discountPercent}% OFF • {appliedReferral.code}
+                          {discountPercent}% OFF • {appliedReferral.code}
                         </span>
                       )}
                     </div>
@@ -884,7 +958,7 @@ export default function ProUpgradeModal({
                         <div style={{ fontSize: '0.73rem', color: '#34d399' }}>
                           Code <strong>{appliedReferral.code}</strong> applied
                           {appliedReferral.influencerName ? ` (${appliedReferral.influencerName})` : ''} — you save{' '}
-                          {formatKoboAsCurrency(appliedReferral.discountKobo, currency)}!
+                          {formatKoboAsCurrency(actualDiscountKobo, currency)} on {selectedPlan.name}!
                         </div>
                       )}
                       {referralError && (
@@ -913,7 +987,9 @@ export default function ProUpgradeModal({
                           </>
                         ) : (
                           <>
-                            <span>Upgrade to Pro — {displayFinalPrice}</span>
+                            <span>
+                              Get {selectedPlan.name} — {displayFinalPrice}
+                            </span>
                             <ExternalLink size={14} />
                           </>
                         )}
@@ -928,6 +1004,9 @@ export default function ProUpgradeModal({
                         <RefreshCw size={14} />
                         Refresh Status
                       </button>
+                    </div>
+                    <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Pay easily via Bank Transfer, OPay, USSD, or Card on Paystack. No forced auto-renewals.
                     </div>
                     {errorMsg && (
                       <div style={{ fontSize: '0.76rem', color: '#f87171', lineHeight: 1.4 }}>

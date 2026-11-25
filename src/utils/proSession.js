@@ -105,10 +105,52 @@ export async function saveUserAccountSettings(accessToken, payload = {}) {
   }
 }
 
+export const DEFAULT_PRO_PLANS = [
+  {
+    id: 'pro_monthly',
+    name: '30-Day Pass',
+    shortLabel: '30 Days',
+    badge: 'Try Pro',
+    subtitle: '1 project or trial',
+    amountKobo: 500000,
+    days: 30,
+    includedScans: 30,
+    periodLabel: '/ 30 days',
+    savingsText: '',
+  },
+  {
+    id: 'pro_annual',
+    name: 'Annual Pro',
+    shortLabel: '1 Year',
+    badge: 'Save 50%',
+    subtitle: '₦2,500/mo billed yearly',
+    amountKobo: 3000000,
+    days: 365,
+    includedScans: 100,
+    periodLabel: '/ year',
+    savingsText: 'Save 50%',
+    popular: true,
+  },
+  {
+    id: 'pro_lifetime',
+    name: 'Founding Lifetime',
+    shortLabel: 'Lifetime',
+    badge: 'First 100',
+    subtitle: 'Pay once, own forever',
+    amountKobo: 7500000,
+    days: null,
+    includedScans: 200,
+    periodLabel: 'one-time',
+    savingsText: 'Never expires',
+  },
+];
+
+export const DEFAULT_PRO_PLAN_ID = 'pro_annual';
+
 export const DEFAULT_SCAN_TOPUP_PACKS = [
-  { id: 'scans_50', label: '+50 AI Scans', scans: 50, amountKobo: 300000, badge: 'Quick Boost' },
-  { id: 'scans_100', label: '+100 AI Scans', scans: 100, amountKobo: 500000, badge: 'Most Popular' },
-  { id: 'scans_250', label: '+250 AI Scans', scans: 250, amountKobo: 1000000, badge: 'Best Value' },
+  { id: 'scans_50', label: '+50 AI Scans', scans: 50, amountKobo: 350000, badge: 'Quick Boost' },
+  { id: 'scans_100', label: '+100 AI Scans', scans: 100, amountKobo: 600000, badge: 'Most Popular' },
+  { id: 'scans_250', label: '+250 AI Scans', scans: 250, amountKobo: 1200000, badge: 'Best Value' },
 ];
 
 export function formatKoboAsCurrency(amountKobo, currency = 'NGN') {
@@ -231,7 +273,7 @@ export async function fetchPartnerStats(code, token) {
   return data;
 }
 
-export async function fetchPricingAndReferral({ code = '', accessToken = '' } = {}) {
+export async function fetchPricingAndReferral({ code = '', planId = DEFAULT_PRO_PLAN_ID, accessToken = '' } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -239,7 +281,10 @@ export async function fetchPricingAndReferral({ code = '', accessToken = '' } = 
   const resp = await fetch('/api/validate-referral', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ code: String(code || '').trim().toUpperCase() }),
+    body: JSON.stringify({
+      code: String(code || '').trim().toUpperCase(),
+      planId: String(planId || DEFAULT_PRO_PLAN_ID).trim().toLowerCase(),
+    }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
@@ -743,8 +788,9 @@ export async function fetchSupabaseProProfile(session) {
     remaining: isAdmin ? 999999 : Math.max(0, limit - used),
     unlimited: isAdmin,
   };
+  const planExpiresAt = profile.plan_expires_at ?? null;
 
-  saveStoredProStatus({ isPro, quota });
+  saveStoredProStatus({ isPro, quota, planExpiresAt });
 
   const customPrices =
     profile.custom_prices && typeof profile.custom_prices === 'object' && !Array.isArray(profile.custom_prices)
@@ -760,6 +806,7 @@ export async function fetchSupabaseProProfile(session) {
   return {
     isPro,
     quota,
+    planExpiresAt,
     customPrices,
     contractorProfile,
     sessionValid: true,
@@ -777,6 +824,7 @@ export async function startPaystackCheckout(accessToken, optionsOrFallbackEmail 
       : optionsOrFallbackEmail || {};
   const {
     purchaseType = 'pro_upgrade',
+    planId = DEFAULT_PRO_PLAN_ID,
     packId = null,
     referralCode = '',
     fallbackEmail = '',
@@ -792,6 +840,7 @@ export async function startPaystackCheckout(accessToken, optionsOrFallbackEmail 
     body: JSON.stringify({
       returnOrigin,
       purchaseType,
+      ...(purchaseType === 'pro_upgrade' && planId ? { planId } : {}),
       ...(packId ? { packId } : {}),
       ...(referralCode ? { referralCode: String(referralCode).trim().toUpperCase() } : {}),
     }),
