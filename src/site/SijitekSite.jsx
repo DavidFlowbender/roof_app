@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   Monitor,
+  Play,
   Ruler,
   Share,
   Smartphone,
@@ -349,7 +350,7 @@ export default function SijitekSite() {
                     {products.map((product) => (
                       <a
                         key={product.id}
-                        href={product.launchUrl}
+                        href={`#product-${product.id}`}
                         role="menuitem"
                         className="sjk-nav-product-item"
                         onClick={() => setProductsMenuOpen(false)}
@@ -363,8 +364,8 @@ export default function SijitekSite() {
                         </div>
                         <span className="sjk-nav-product-cat">{product.category}</span>
                         <span className="sjk-nav-product-launch">
-                          <span>Launch {product.name}</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          <span>View {product.name}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </span>
                       </a>
                     ))}
@@ -475,7 +476,7 @@ export default function SijitekSite() {
                 <ArrowRight className="w-4 h-4" />
               </a>
               {primaryProduct && (
-                <a href={primaryProduct.launchUrl} className="sjk-btn-outline">
+                <a href={`#product-${primaryProduct.id}`} className="sjk-btn-outline">
                   <Ruler className="w-4 h-4" />
                   <span>Open {primaryProduct.name}</span>
                 </a>
@@ -564,7 +565,12 @@ export default function SijitekSite() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {products.map((product) => (
-              <article key={product.id} className="sjk-product-sheet sjk-reveal">
+              <article
+                key={product.id}
+                id={`product-${product.id}`}
+                className="sjk-product-sheet sjk-reveal"
+                style={{ scrollMarginTop: '84px' }}
+              >
                 <div className="sjk-product-banner">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <span className="sjk-mono" style={{ fontSize: '11.5px', fontWeight: 600, color: '#6c757d' }}>
@@ -689,6 +695,46 @@ export default function SijitekSite() {
                             )}
                           </div>
                         ))}
+
+                        {product.videoGuideUrl && (
+                          <div className="sjk-device-row">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0 }}>
+                              <div
+                                style={{
+                                  width: '36px',
+                                  height: '36px',
+                                  borderRadius: '8px',
+                                  background: '#f7eae5',
+                                  border: '1px solid rgba(184, 74, 39, 0.28)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Play className="w-4 h-4" style={{ color: '#b84a27' }} />
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#14191f' }}>
+                                  Video Walkthrough
+                                </div>
+                                <div style={{ fontSize: '11.5px', color: '#6c757d', lineHeight: 1.35 }}>
+                                  Watch the step-by-step guide on YouTube
+                                </div>
+                              </div>
+                            </div>
+
+                            <a
+                              href={product.videoGuideUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="sjk-device-btn subtle"
+                            >
+                              <span>Watch on YouTube</span>
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
 

@@ -16,7 +16,6 @@ import {
   calculateSlantingHeightFromKingpost,
 } from '../utils/roofMath';
 import { getStageConfig } from '../utils/stagePresets';
-import { formatLength } from '../utils/units';
 import {
   analyzePaperSketch,
   buildScaledShapeVertices,
@@ -895,10 +894,9 @@ export default function PaperSketchModal({
               )}
             </div>
 
-            {/* Subtle 1-line summary */}
+            {/* Subtle 1-line helper */}
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-              Footprint: <strong style={{ color: 'var(--text-primary)' }}>{formatLength(lengthM, unitSystem)} × {formatLength(breadthM, unitSystem)}</strong>
-              {' '}(exact paper size) — Select site measurement level &amp; edit walls in 2D space after applying.
+              You can still edit dimensions in 2D space after applying.
             </div>
 
             {analysisResult?.visionWarning && (

@@ -21,6 +21,7 @@ export function getSijitekProducts() {
         'Turn any floor plan or hand-drawn site sketch into an accurate 3D roof model and a clear material schedule. Whether you are a homeowner verifying a quote, a surveyor preparing a Bill of Quantities, or a contractor measuring on site, RoofCalc Pro removes guesswork from roof estimation.',
       launchUrl: roofCalcUrl,
       shareUrl: roofCalcShareUrl,
+      videoGuideUrl: 'https://youtu.be/lLL4IdY3rcc',
       specs: [
         {
           label: 'Site Sketch & 2D Plan',

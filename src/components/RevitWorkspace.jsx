@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ArrowRight,
   Box,
@@ -11,8 +11,8 @@ import {
   Download,
   Droplets,
   FileText,
+  Hammer,
   Layers,
-  LayoutGrid,
   Lock,
   LogIn,
   LogOut,
@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { ROOF_TYPES, SHAPE_PRESETS } from '../utils/roofMath';
 import { UNIT_SYSTEMS, formatLength, formatArea } from '../utils/units';
-import { CURRENCIES, MATERIAL_PROFILES, formatCurrency } from '../utils/materials';
+import { CURRENCIES, MATERIAL_PROFILES, estimateMaterials, formatCurrency } from '../utils/materials';
 import { BUILDING_STAGES } from '../utils/stagePresets';
 import { getUserInitials, getUserDisplayName, isAdminEmail } from '../utils/proSession';
 import Roof3DViewer from './Roof3DViewer';
@@ -89,7 +89,6 @@ export default function RevitWorkspace({
   setSketchUnderlayImage,
   wastePercentage,
   setWastePercentage,
-  onSwitchLayout,
   wcConfig = { floors: 1, extraDrops: 0 },
   setWcConfig,
   wcMaterials,
@@ -108,12 +107,15 @@ export default function RevitWorkspace({
   proUser = null,
   onSignOut = null,
 }) {
-  // Primary navigation: 'design' | 'boq' | 'wc'
+  // Primary navigation: 'design' | 'boq' | 'woodwork' | 'wc' | 'company'
   const [mainTab, setMainTab] = useState('design');
   // Sub-view inside 'design': 'split' | '2d' | '3d'
   const [viewLayout, setViewLayout] = useState('split');
+  // Sub-page inside 'woodwork': 'view' (3D Wood View) | 'quote' (Wood Quote & BOQ)
+  const [woodSubPage, setWoodSubPage] = useState('view');
   // Sub-page inside 'wc': 'view' (3D WC View) | 'quote' (WC Quote & BOQ)
   const [wcSubPage, setWcSubPage] = useState('view');
+  const [woodCopied, setWoodCopied] = useState(false);
   // Collapsible optional settings drawer
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   // Top-right profile dropdown menu
@@ -188,6 +190,40 @@ export default function RevitWorkspace({
 
   const isCustomShape = Boolean(polygonVertices && polygonVertices.length >= 3);
   const isAdmin = isAdminEmail(proUser?.email);
+
+  // Dedicated Woodwork & Timber BOQ calculation for the desktop Woodwork tab
+  const woodBOQ = useMemo(() => {
+    const activePrices = isPremium ? customPrices : {};
+    const res = estimateMaterials(geometry, selectedMaterial, currencyCode, activePrices, {
+      buildingStage: 'woodwork',
+      parapetConfig,
+      woodworkConfig: { ...(woodworkConfig || {}), includeTimberBOQ: true },
+      allowTimber: true,
+    });
+    const items = (res?.items || []).filter(
+      (it) => it.category.includes('Timber') && Number(it.total) > 0
+    );
+    const grandTotal = items.reduce((sum, it) => sum + (Number(it.total) || 0), 0);
+    return { items, grandTotal };
+  }, [geometry, selectedMaterial, currencyCode, customPrices, isPremium, parapetConfig, woodworkConfig]);
+
+  const handleCopyWoodSummary = () => {
+    if (!isPremium || !woodBOQ.items.length) return;
+    const lines = [
+      'ROOFCALC PRO — WOODWORK & TIMBER QUOTATION',
+      `Roof Area: ${formatArea(geometry?.totalArea || 0, unitSystem)} | Truss Spacing: ${woodworkConfig?.trussSpacing || 1.2}m`,
+      '',
+      ...woodBOQ.items.map(
+        (it, i) =>
+          `${i + 1}. ${it.name} — ${it.quantity} ${it.unit} @ ${formatCurrency(it.unitPrice, currencyCode)} = ${formatCurrency(it.total, currencyCode)}`
+      ),
+      '',
+      `WOODWORK GRAND TOTAL: ${formatCurrency(woodBOQ.grandTotal, currencyCode)}`,
+    ];
+    navigator.clipboard?.writeText(lines.join('\n')).catch(() => {});
+    setWoodCopied(true);
+    setTimeout(() => setWoodCopied(false), 2500);
+  };
 
   // If admin logs out while previewing Mobile mode on a laptop/desktop, automatically return to Desktop Studio
   useEffect(() => {
@@ -337,12 +373,35 @@ export default function RevitWorkspace({
 
           <button
             type="button"
+            className={`studio-nav-tab ${mainTab === 'woodwork' ? 'active' : ''}`}
+            onClick={() => setMainTab('woodwork')}
+            title="Woodwork & Timber Carcass — 3D Timber Preview & Quotation"
+          >
+            <Hammer className="w-4 h-4 text-amber-400" />
+            <span>3. Woodwork</span>
+            <span
+              className="studio-cost-pill"
+              style={{
+                background: 'rgba(245, 158, 11, 0.16)',
+                color: '#fbbf24',
+              }}
+            >
+              {isPremium
+                ? hasActiveDesign
+                  ? formatCurrency(woodBOQ.grandTotal, currencyCode)
+                  : '—'
+                : 'PRO'}
+            </span>
+          </button>
+
+          <button
+            type="button"
             className={`studio-nav-tab ${mainTab === 'wc' ? 'active' : ''}`}
             onClick={() => setMainTab('wc')}
             title="Water Collector (WC) Quotation & 3D Drop Pipe Plan"
           >
             <Droplets className="w-4 h-4 text-sky-400" />
-            <span>3. WC</span>
+            <span>4. WC</span>
             <span
               className="studio-cost-pill"
               style={{
@@ -365,7 +424,7 @@ export default function RevitWorkspace({
             title="Company Info, PDF Logo & Permanent Pro Branding"
           >
             <Building2 className="w-4 h-4 text-indigo-400" />
-            <span>4. Company Info</span>
+            <span>5. Company Info</span>
             {!isPremium && (
               <span
                 className="studio-cost-pill"
@@ -447,18 +506,6 @@ export default function RevitWorkspace({
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>Mobile</span>
-            </button>
-          )}
-
-          {onSwitchLayout && (
-            <button
-              type="button"
-              className="studio-ghost-btn"
-              onClick={onSwitchLayout}
-              title="Switch to Classic Dashboard"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Classic</span>
             </button>
           )}
 
@@ -2033,6 +2080,655 @@ export default function RevitWorkspace({
                 </div>
               </div>
             </section>
+          </div>
+        )}
+
+        {mainTab === 'woodwork' && (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              padding: '12px',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Sub-Page Switcher Bar (matches WC & Mobile Woodwork two-subpage workflow) */}
+            <div
+              style={{
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                background: '#111827',
+                border: '1px solid #1f2937',
+                borderRadius: '11px',
+                padding: '6px 10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    display: 'inline-grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '4px',
+                    background: '#090e1a',
+                    padding: '4px',
+                    borderRadius: '9px',
+                    border: '1px solid #1e293b',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setWoodSubPage('view')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '7px',
+                      border: 'none',
+                      background: woodSubPage === 'view' ? '#d97706' : 'transparent',
+                      color: woodSubPage === 'view' ? '#ffffff' : '#94a3b8',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Box className="w-4 h-4" />
+                    <span>3D Wood View</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWoodSubPage('quote')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '7px',
+                      border: 'none',
+                      background: woodSubPage === 'quote' ? '#d97706' : 'transparent',
+                      color: woodSubPage === 'quote' ? '#ffffff' : '#94a3b8',
+                      fontSize: '12.5px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Hammer className="w-4 h-4" />
+                    <span>Wood Quote</span>
+                    {!isPremium && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setWoodSubPage((prev) => (prev === 'view' ? 'quote' : 'view'))}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    background: '#1e293b',
+                    color: '#fbbf24',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {woodSubPage === 'view' ? 'View Quote →' : '← 3D Wood View'}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '12.5px', color: '#94a3b8' }}>
+                <span>
+                  Truss Spacing: <strong style={{ color: '#e2e8f0' }}>{woodworkConfig?.trussSpacing || 1.2}m</strong>
+                </span>
+                <span>
+                  Timber Length: <strong style={{ color: '#e2e8f0' }}>{woodworkConfig?.timberLengthStandard || 3.6}m</strong>
+                </span>
+                <span style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24' }}>
+                  {isPremium
+                    ? hasActiveDesign
+                      ? formatCurrency(woodBOQ.grandTotal, currencyCode)
+                      : '—'
+                    : 'PRO QUOTE'}
+                </span>
+              </div>
+            </div>
+
+            {!hasActiveDesign ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  textAlign: 'center',
+                  color: '#94a3b8',
+                }}
+              >
+                <Hammer className="w-10 h-10 text-amber-400" />
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#f8fafc' }}>
+                  Draw or scan a floor plan first
+                </div>
+                <p style={{ margin: 0, maxWidth: '380px', fontSize: '13px', lineHeight: 1.5 }}>
+                  Create your 2D roof layout to preview the 3D timber framing carcass and calculate exact rafter, purlin, kingpost, and tie-beam quantities.
+                </p>
+                <button
+                  type="button"
+                  className="btn-primary-action"
+                  onClick={() => setMainTab('design')}
+                >
+                  Go to 1. 2D &amp; 3D Plan
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* SUB-PAGE 1: FULL-AREA 3D TIMBER FRAMING PREVIEW (Free for all users) */}
+                {woodSubPage === 'view' && (
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className="studio-canvas-pane" style={{ flex: 1, minHeight: 0, height: 'auto' }}>
+                      <Roof3DViewer
+                        geometry={geometry}
+                        roofType={roofType}
+                        extensions={extensions}
+                        buildingStage={buildingStage}
+                        parapetConfig={parapetConfig}
+                        woodworkConfig={woodworkConfig}
+                        selectedMaterial={selectedMaterial}
+                        polygonVertices={polygonVertices}
+                        wcConfig={{ ...(wcConfig || {}), enabled: false }}
+                        forcedDisplayMode="framing"
+                      />
+                    </div>
+
+                    {/* Bottom Woodwork Controls Bar */}
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, minmax(200px, 1fr)) auto',
+                        gap: '10px',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          padding: '10px 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '10px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Truss Spacing</div>
+                          <div style={{ fontSize: '10.5px', color: '#64748b' }}>Center-to-center rafters</div>
+                        </div>
+                        <select
+                          className="studio-select"
+                          value={woodworkConfig?.trussSpacing || 1.2}
+                          onChange={(e) =>
+                            setWoodworkConfig &&
+                            setWoodworkConfig((prev) => ({ ...prev, trussSpacing: Number(e.target.value) }))
+                          }
+                          style={{ padding: '5px 8px', fontSize: '12px' }}
+                        >
+                          <option value={0.9}>0.9 m (Heavy)</option>
+                          <option value={1.2}>1.2 m (Standard)</option>
+                          <option value={1.5}>1.5 m (Wide)</option>
+                        </select>
+                      </div>
+
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          padding: '10px 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '10px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Timber Standard Length</div>
+                          <div style={{ fontSize: '10.5px', color: '#64748b' }}>Market plank length</div>
+                        </div>
+                        <select
+                          className="studio-select"
+                          value={woodworkConfig?.timberLengthStandard || 3.6}
+                          onChange={(e) =>
+                            setWoodworkConfig &&
+                            setWoodworkConfig((prev) => ({ ...prev, timberLengthStandard: Number(e.target.value) }))
+                          }
+                          style={{ padding: '5px 8px', fontSize: '12px' }}
+                        >
+                          <option value={3.6}>3.6 m (12 ft)</option>
+                          <option value={4.8}>4.8 m (16 ft)</option>
+                        </select>
+                      </div>
+
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          border: '1px solid #334155',
+                          borderRadius: '10px',
+                          padding: '10px 14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '10px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700 }}>Anti-Termite Treatment</div>
+                          <div style={{ fontSize: '10.5px', color: '#64748b' }}>Solignum / wood preservative</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(woodworkConfig?.includeTreatment)}
+                          onChange={(e) =>
+                            setWoodworkConfig &&
+                            setWoodworkConfig((prev) => ({ ...prev, includeTreatment: e.target.checked }))
+                          }
+                          style={{ width: '16px', height: '16px', accentColor: '#f59e0b', cursor: 'pointer' }}
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setWoodSubPage('quote')}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          color: '#0f172a',
+                          fontSize: '12.5px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {isPremium ? 'View Wood Quote →' : 'Unlock Wood Quote (Pro) →'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* SUB-PAGE 2: WOODWORK & TIMBER QUOTATION (Pro-gated) */}
+                {woodSubPage === 'quote' && !isPremium && (
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '20px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '100%',
+                        maxWidth: '520px',
+                        background: 'linear-gradient(145deg, rgba(245, 158, 11, 0.14), rgba(15, 23, 42, 0.96))',
+                        border: '1px solid rgba(245, 158, 11, 0.4)',
+                        borderRadius: '16px',
+                        padding: '28px 24px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        gap: '12px',
+                        boxShadow: '0 20px 50px rgba(2, 6, 23, 0.55)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '54px',
+                          height: '54px',
+                          borderRadius: '50%',
+                          background: 'rgba(245, 158, 11, 0.18)',
+                          border: '1px solid rgba(245, 158, 11, 0.45)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fbbf24',
+                        }}
+                      >
+                        <Lock className="w-6 h-6" />
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 800, color: '#f8fafc' }}>
+                        Woodwork &amp; Timber Quote is Pro
+                      </div>
+                      <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: 1.55 }}>
+                        Upgrade to RoofCalc Pro to unlock full timber carcass schedules — rafters, purlins, tie beams, kingposts, fascia boards, nails, wood treatment, carpenter labour, and branded PDF exports.
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenProModal && onOpenProModal()}
+                        style={{
+                          marginTop: '4px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          color: '#0f172a',
+                          border: 'none',
+                          borderRadius: '10px',
+                          padding: '11px 20px',
+                          fontSize: '13.5px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Crown className="w-4 h-4" />
+                        <span>Unlock Woodwork Quote (Pro)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {woodSubPage === 'quote' && isPremium && (
+                  <div className="studio-boq-scroll" style={{ padding: 0, flex: 1, minHeight: 0 }}>
+                    <section className="boq-section glass-panel" style={{ background: '#18181c', margin: 0 }}>
+                      <div className="boq-header">
+                        <div className="boq-title">
+                          <Hammer className="w-5 h-5 text-amber-400" />
+                          <span>Woodwork &amp; Timber Quotation</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#94a3b8', flexWrap: 'wrap' }}>
+                          <span>
+                            Truss: <strong style={{ color: '#e2e8f0' }}>{woodworkConfig?.trussSpacing || 1.2}m</strong>
+                          </span>
+                          <span>
+                            Length: <strong style={{ color: '#e2e8f0' }}>{woodworkConfig?.timberLengthStandard || 3.6}m</strong>
+                          </span>
+                          <span>
+                            Roof Area: <strong style={{ color: '#fbbf24' }}>{formatArea(geometry.totalArea, unitSystem)}</strong>
+                          </span>
+                          {isEditingPrices ? (
+                            <button
+                              type="button"
+                              onClick={handleSaveDesktopPrices}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 11px',
+                                borderRadius: '6px',
+                                background: '#10b981',
+                                color: '#052e16',
+                                border: 'none',
+                                fontSize: '11.5px',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Check size={13} />
+                              <span>Save</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setIsEditingPrices(true)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                background: '#1e293b',
+                                color: '#fbbf24',
+                                border: '1px solid #334155',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Pencil size={11} />
+                              <span>Edit Prices</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Woodwork Table */}
+                      <div className="boq-table-wrapper">
+                        <table className="boq-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Timber / Woodwork Item &amp; Spec</th>
+                              <th>Qty</th>
+                              <th>Unit</th>
+                              <th>Unit Price ({currencyCode})</th>
+                              <th>Total Cost</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {woodBOQ.items.map((item, idx) => (
+                              <tr key={item.id}>
+                                <td style={{ color: '#64748b' }}>{idx + 1}</td>
+                                <td>
+                                  {isEditingPrices ? (
+                                    <input
+                                      type="text"
+                                      aria-label={`Edit timber name for ${item.defaultName || item.name}`}
+                                      placeholder={item.defaultName || item.name}
+                                      value={
+                                        item.isCustom
+                                          ? item.name
+                                          : customPrices?.__customNames?.[item.id] !== undefined
+                                          ? customPrices.__customNames[item.id]
+                                          : item.name
+                                      }
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (item.isCustom) {
+                                          const prevList = Array.isArray(customPrices?.__extraItems)
+                                            ? customPrices.__extraItems
+                                            : [];
+                                          setCustomPrices({
+                                            ...(customPrices || {}),
+                                            __extraItems: prevList.map((ci) =>
+                                              ci.id === item.id ? { ...ci, name: val } : ci
+                                            ),
+                                          });
+                                        } else {
+                                          setCustomPrices({
+                                            ...(customPrices || {}),
+                                            __customNames: {
+                                              ...(customPrices?.__customNames || {}),
+                                              [item.id]: val,
+                                            },
+                                          });
+                                        }
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        maxWidth: '300px',
+                                        background: 'rgba(15, 23, 42, 0.55)',
+                                        color: '#f8fafc',
+                                        border: '1px solid rgba(51, 65, 85, 0.75)',
+                                        borderRadius: '6px',
+                                        padding: '3px 8px',
+                                        fontSize: '12.5px',
+                                        fontWeight: 700,
+                                        marginBottom: '2px',
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="boq-item-title">{item.name}</div>
+                                  )}
+                                  <div className="boq-item-spec">{item.spec}</div>
+                                </td>
+                                <td className="boq-qty">{item.quantity.toLocaleString()}</td>
+                                <td>{item.unit}</td>
+                                <td>
+                                  {isEditingPrices ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      className="boq-price-input"
+                                      style={{ width: '90px', padding: '4px 8px', fontSize: '12px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                      value={customPrices[item.id] !== undefined ? customPrices[item.id] : item.unitPrice}
+                                      onChange={(e) => setCustomPrices({ ...customPrices, [item.id]: e.target.value })}
+                                    />
+                                  ) : (
+                                    <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#e2e8f0', fontFamily: 'monospace' }}>
+                                      {formatCurrency(item.unitPrice, currencyCode)}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="boq-price">
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>{formatCurrency(item.total, currencyCode)}</span>
+                                    {item.isCustom && isEditingPrices && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteDesktopCustomRow(item.id)}
+                                        title="Remove custom timber row"
+                                        style={{
+                                          background: 'rgba(239, 68, 68, 0.14)',
+                                          color: '#fca5a5',
+                                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                                          borderRadius: '5px',
+                                          padding: '3px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {isEditingPrices && (
+                        <form
+                          onSubmit={(e) => handleAddDesktopCustomRow('wood', e)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                            padding: '8px 10px',
+                            marginBottom: '10px',
+                            background: 'rgba(15, 23, 42, 0.55)',
+                            border: '1px dashed rgba(245, 158, 11, 0.4)',
+                            borderRadius: '8px',
+                          }}
+                        >
+                          <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Plus size={14} /> Add Woodwork Row:
+                          </span>
+                          <input
+                            type="text"
+                            value={newRowName}
+                            onChange={(e) => setNewRowName(e.target.value)}
+                            placeholder="Timber / carpentry item name"
+                            style={{ flex: '2 1 180px', padding: '5px 8px', fontSize: '12px', background: '#090e1a' }}
+                          />
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={newRowQty}
+                            onChange={(e) => setNewRowQty(e.target.value)}
+                            placeholder="Qty"
+                            style={{ width: '68px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                          />
+                          <input
+                            type="text"
+                            value={newRowUnit}
+                            onChange={(e) => setNewRowUnit(e.target.value)}
+                            placeholder="lengths"
+                            style={{ width: '74px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'center' }}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            value={newRowPrice}
+                            onChange={(e) => setNewRowPrice(e.target.value)}
+                            placeholder={`Unit Price (${currencyCode})`}
+                            style={{ width: '125px', padding: '5px 8px', fontSize: '12px', background: '#090e1a', textAlign: 'right' }}
+                          />
+                          <button
+                            type="submit"
+                            disabled={!newRowName.trim()}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              background: newRowName.trim() ? '#f59e0b' : '#1e293b',
+                              color: newRowName.trim() ? '#0f172a' : '#64748b',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: newRowName.trim() ? 'pointer' : 'not-allowed',
+                            }}
+                          >
+                            + Add Row
+                          </button>
+                        </form>
+                      )}
+
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>
+                        <strong>Disclaimer:</strong> Default timber prices are generic reference estimates and may not reflect actual local market prices.
+                      </div>
+
+                      <div className="boq-summary-bar">
+                        <div className="summary-figures">
+                          <div className="figure-item">
+                            <span className="figure-label">Woodwork &amp; Timber Total</span>
+                            <span className="figure-val grand">{formatCurrency(woodBOQ.grandTotal, currencyCode)}</span>
+                          </div>
+                        </div>
+                        <div className="action-buttons-group">
+                          <button
+                            type="button"
+                            className="btn-primary-action"
+                            onClick={() => {
+                              if (setQuoteScope) setQuoteScope('wood');
+                              setQuoteModalOpen(true);
+                            }}
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Download Wood PDF</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary-action"
+                            onClick={handleCopyWoodSummary}
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>{woodCopied ? 'Copied!' : 'Copy Wood Quote'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
